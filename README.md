@@ -1,6 +1,6 @@
-# paper2tools_v2
+# Paper2tools
 
-学术论文推理步骤深度分析工具
+学术论文推理步骤深度分析工具（paper2tools_v2）
 
 ## 项目概述
 
