@@ -1,0 +1,42 @@
+# Step2 配置: 工具信息注入
+# 在此文件中定义 Step2 的所有可配置参数
+
+# 数据路径
+data:
+  reasoning_xml_dir: "data/input"        # reasoning_chain.xml 所在目录
+  tools_json_dir: "data/input"           # _tools_extract_result.json 所在目录
+  step1_output_dir: "data/step1_output"  # Step1 输出目录（可选引用聚类结果）
+  output_dir: "data/step2_output"        # 输出目录
+
+# 工具匹配参数
+matching:
+  strategy: "hybrid"                     # 选项: text, semantic, evidence, hybrid
+  # 文本匹配参数
+  text:
+    case_sensitive: false                # 是否区分大小写
+    fuzzy_threshold: 0.8                 # 模糊匹配阈值
+  # 语义匹配参数
+  semantic:
+    model_name: "all-MiniLM-L6-v2"      # embedding 模型
+    similarity_threshold: 0.7           # 相似度阈值
+  # Evidence 匹配参数
+  evidence:
+    use_ptlink_evidence: true            # 使用 ptlink 的 evidence 字段
+  # 混合策略权重
+  hybrid:
+    text_weight: 0.3
+    semantic_weight: 0.4
+    evidence_weight: 0.3
+    min_confidence: 0.5                  # 最低置信度阈值
+
+# XML 增强参数
+enrichment:
+  add_tool_refs: true                    # 在 <step> 中添加 <ref type="tool">
+  add_tools_section: true                # 在 <conclusion_reasoning> 末尾添加 <tools>
+  include_version_info: true             # 包含版本信息
+  max_desc_length: 2000                  # 工具描述最大长度
+
+# 运行参数
+runtime:
+  verbose: true
+  batch_size: 100                        # 批量处理论文数

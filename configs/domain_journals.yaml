@@ -1,0 +1,51 @@
+# 按学科领域分组的期刊列表
+# 期刊名必须与 batch_csv 中 pdf_path 里的名称完全一致
+# 用途: 按领域从 TOS 筛选论文进行流水线处理
+
+bioinformatics:
+  label: "生物信息学"
+  journals:
+    # --- 生物信息学 / 计算生物学 核心期刊 ---
+    - "Bioinformatics"                          # 16,793 篇 | Oxford, 生信旗舰
+    - "PLOS Computational Biology"              #  3,475 篇 | 计算生物学
+    - "Genome Research"                         #  4,818 篇 | 基因组学方法与分析
+    - "Genome Biology"                          #  6,058 篇 | 基因组学综合
+    - "Nucleic Acids Research"                  # 43,043 篇 | 核酸/数据库/工具
+    - "GigaScience"                             #    861 篇 | 大数据生物学
+    - "Molecular Systems Biology"               #    817 篇 | 系统生物学
+    - "Cell Systems"                            #    721 篇 | 系统生物学 (Cell子刊)
+    - "iMeta"                                   #     12 篇 | 元基因组/微生物组信息学
+
+    # --- 遗传学 / 基因组学 (大量生信方法论文) ---
+    - "Nature Genetics"                         # 14,301 篇 | 遗传学旗舰
+    - "PLOS Genetics"                           # 12,031 篇 | 遗传学开放获取
+    - "Genetics"                                # 16,571 篇 | 经典遗传学
+    - "Cell Genomics"                           #      4 篇 | 基因组学 (Cell子刊)
+
+    # --- Nature 方法/计算/生物技术 ---
+    - "Nature Methods"                          #  4,263 篇 | 生物学新方法(含大量生信工具)
+    - "Nature Biotechnology"                    #  6,349 篇 | 生物技术(含测序/组学技术)
+    - "Nature Computational Science"            #    124 篇 | 计算科学(含计算生物)
+    - "Nature Protocols"                        #  5,713 篇 | 实验/分析流程
+
+    # --- 细胞/分子生物学 (涉及组学数据分析) ---
+    - "Molecular Cell"                          #  9,201 篇 | 分子细胞生物学
+    - "Molecular Biology of the Cell"           #  9,988 篇 | 细胞生物学
+    - "Cell Reports"                            #  9,177 篇 | Cell子刊, 常含生信分析
+    - "Nature Structural & Molecular Biology"   #  3,823 篇 | 结构/分子生物学
+
+    # --- 综合性高影响力 (大量生信相关论文) ---
+    - "Cell"                                    # 21,355 篇 | 生命科学旗舰
+    - "Nature Medicine"                         # 14,854 篇 | 医学/转化研究
+    - "Science China Life Sciences"             #  1,814 篇 | 生命科学综合
+
+    # --- 微生物组 / 进化 ---
+    - "Nature Microbiology"                     #  2,320 篇 | 微生物学
+    - "Cell Host & Microbe"                     #  2,917 篇 | 宿主-微生物互作
+    - "Nature Ecology and Evolution"            #  1,119 篇 | 生态/进化
+
+    # --- 信号通路 / 功能基因组 ---
+    - "Signal Transduction and Targeted Therapy" # 1,448 篇 | 信号转导/靶向治疗
+    - "Cell Research"                           #  3,005 篇 | 细胞研究
+    - "eLife"                                   #  1,373 篇 | 开放获取生命科学
+    - "Life Science Alliance"                   #    206 篇 | 生命科学联盟
