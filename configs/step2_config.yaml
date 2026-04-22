@@ -1,11 +1,7 @@
 # Step2 配置: 工具信息注入
 
-# TOS 配置
+# TOS：桶名、密钥、endpoint 等见 .env（TOS_BUCKET、TOS_ACCESS_KEY、TOS_SECRET_KEY、TOS_ENDPOINT）
 tos:
-  bucket: "wenyon-paper"
-  access_key: ""                         # 从环境变量 TOS_ACCESS_KEY 读取
-  secret_key: ""                         # 从环境变量 TOS_SECRET_KEY 读取
-  endpoint: "tos-s3-cn-beijing.volces.com"
   region: "cn-beijing"
   xml_source_prefix: "paper_ocr/xml/"    # reasoning_chain.xml 所在目录
   md_prefix: "paper_ocr/md/"             # 论文 MD 文件所在目录

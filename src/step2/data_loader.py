@@ -18,6 +18,14 @@ except ImportError:
     pass
 
 
+def _tos_bucket(config: dict) -> str:
+    """桶名：环境变量 TOS_BUCKET 优先，否则使用 YAML 中的 bucket。"""
+    b = os.getenv("TOS_BUCKET", "").strip()
+    if b:
+        return b
+    return (config.get("bucket") or "").strip()
+
+
 def _normalize_tos_endpoint(endpoint: str) -> str:
     """将 S3 格式的 endpoint 转换为 TOS SDK 格式"""
     e = (endpoint or "").strip()
@@ -69,7 +77,7 @@ def download_text(client: tos.TosClientV2, bucket: str, key: str) -> str:
 def load_paper_data(paper_id: str, tos_config: dict) -> Optional[PaperData]:
     """加载单篇论文的 reasoning_chain.xml 和 MD 文件"""
     client = get_tos_client(tos_config)
-    bucket = tos_config["bucket"]
+    bucket = _tos_bucket(tos_config)
     fs_id = normalize_paper_id(paper_id)
 
     xml_key = f"{tos_config['xml_source_prefix']}{fs_id}_reasoning_chain.xml"
@@ -102,7 +110,7 @@ def load_paper_data(paper_id: str, tos_config: dict) -> Optional[PaperData]:
 def list_paper_ids(tos_config: dict, limit: Optional[int] = None) -> List[str]:
     """列举 TOS 上所有有 reasoning_chain.xml 的 paper_id"""
     client = get_tos_client(tos_config)
-    bucket = tos_config["bucket"]
+    bucket = _tos_bucket(tos_config)
     prefix = tos_config["xml_source_prefix"]
     suffix = "_reasoning_chain.xml"
 
@@ -134,11 +142,11 @@ def output_key(paper_id: str, tos_config: dict) -> str:
 
 def output_exists(paper_id: str, tos_config: dict) -> bool:
     client = get_tos_client(tos_config)
-    return client.does_object_exist(tos_config["bucket"], output_key(paper_id, tos_config))
+    return client.does_object_exist(_tos_bucket(tos_config), output_key(paper_id, tos_config))
 
 
 def upload_xml(paper_id: str, xml_text: str, tos_config: dict) -> str:
     client = get_tos_client(tos_config)
     key = output_key(paper_id, tos_config)
-    client.put_object(tos_config["bucket"], key, content=xml_text.encode("utf-8"))
+    client.put_object(_tos_bucket(tos_config), key, content=xml_text.encode("utf-8"))
     return key

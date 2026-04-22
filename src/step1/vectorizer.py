@@ -15,14 +15,24 @@ import httpx
 from .data_loader import ReasoningChain
 from ..db import LanceVectorStore
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
+
+_DEFAULT_EMBED_API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
 
 
 class DashScopeEmbedder:
     """DashScope Embedding API 客户端，worker pool 限速 + jitter backoff"""
 
     def __init__(self, config: Dict):
-        self.api_url = config.get("api_url", "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings")
+        self.api_url = (
+            (config.get("api_url") or os.environ.get("API_URL") or _DEFAULT_EMBED_API_URL).strip()
+        )
         self.api_key = (
             config.get("access_key")
             or os.environ.get("DASHSCOPE_API_KEY")
