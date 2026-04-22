@@ -1,0 +1,154 @@
+{
+    "workflow_id": "bioinfo_commot_scc_v1",
+    "title": "基于集体最优传输的空间细胞通讯分析",
+    "domain_tags": ["生物信息学", "空间转录组学", "细胞通讯", "最优传输"],
+    "description": "利用 COMMOT 方法推断空间转录组数据中的细胞间通讯网络，分析信号空间方向及下游基因调控。",
+    "source_paper": "Cang et al., Nature Methods, 2023 (https://doi.org/10.1038/s41592-022-01728-4)",
+    "steps": [
+        {
+            "step_id": 1,
+            "logic_description": "加载空间转录组数据（包含基因表达矩阵和空间坐标信息），并进行预处理。根据配体-受体数据库（如 CellChatDB）筛选出感兴趣的信号对。",
+            "tool_intent": "数据加载与配体-受体对筛选",
+            "suggested_tools": ["COMMOT (Python)"],
+            "io_schema": {
+            "inputs": [
+                {
+                "name": "spatial_expression_matrix",
+                "type": "MATRIX",
+                "description": "空间转录组的基因表达矩阵 (spots x genes)"
+                },
+                {
+                "name": "spatial_coordinates",
+                "type": "COORDINATES",
+                "description": "每个 spot 的空间坐标 (x, y)"
+                },
+                {
+                "name": "lr_database",
+                "type": "DATABASE",
+                "description": "配体-受体相互作用数据库"
+                }
+            ],
+            "outputs": [
+                {
+                "name": "filtered_lr_pairs",
+                "type": "LIST",
+                "description": "筛选出的用于分析的配体-受体对列表"
+                }
+            ]
+            }
+        },
+        {
+            "step_id": 2,
+            "logic_description": "构建集体最优传输（Collective Optimal Transport）模型。将配体和受体的表达视为分布，基于空间距离构建代价矩阵，同时优化多个信号分子的传输计划以处理竞争关系。",
+            "tool_intent": "构建 CCC 通讯网络模型",
+            "suggested_tools": ["COMMOT (Python)"],
+            "io_schema": {
+            "inputs": [
+                {
+                "name": "expression_data",
+                "type": "MATRIX",
+                "description": "基因表达数据"
+                },
+                {
+                "name": "coordinates",
+                "type": "COORDINATES",
+                "description": "空间坐标"
+                },
+                {
+                "name": "lr_pairs",
+                "type": "LIST",
+                "description": "配体-受体对"
+                }
+            ],
+            "outputs": [
+                {
+                "name": "ccc_network_matrix",
+                "type": "MATRIX",
+                "description": "细胞间通讯强度矩阵 (CCC Matrix)，记录了每个 spot 向其他 spot 发送信号的强度"
+                }
+            ]
+            }
+        },
+        {
+            "step_id": 3,
+            "logic_description": "基于推断出的通讯矩阵，计算每个位置的信号发送/接收向量，从而可视化空间信号的方向（如向上、向下或特定区域流动）。",
+            "tool_intent": "空间信号方向可视化",
+            "suggested_tools": ["COMMOT (Python)"],
+            "io_schema": {
+            "inputs": [
+                {
+                "name": "ccc_matrix",
+                "type": "MATRIX",
+                "description": "细胞间通讯矩阵"
+                },
+                {
+                "name": "coordinates",
+                "type": "COORDINATES",
+                "description": "空间坐标"
+                }
+            ],
+            "outputs": [
+                {
+                "name": "signaling_vector_field",
+                "type": "VECTOR_FIELD",
+                "description": "空间信号方向向量场"
+                }
+            ]
+            }
+        },
+        {
+            "step_id": 4,
+            "logic_description": "进行下游基因分析。计算每个细胞/spot 接收到的信号总量，并利用 tradeSeq 等方法识别与信号接收量相关的差异表达基因（DEGs）。",
+            "tool_intent": "识别信号调控的下游基因",
+            "suggested_tools": ["tradeSeq", "COMMOT"],
+            "io_schema": {
+            "inputs": [
+                {
+                "name": "ccc_matrix",
+                "type": "MATRIX",
+                "description": "细胞间通讯矩阵"
+                },
+                {
+                "name": "expression_data",
+                "type": "MATRIX",
+                "description": "基因表达数据"
+                }
+            ],
+            "outputs": [
+                {
+                "name": "signaling_degs",
+                "type": "GENE_LIST",
+                "description": "与信号接收显著相关的差异表达基因列表"
+                }
+            ]
+            }
+        },
+        {
+            "step_id": 5,
+            "logic_description": "利用随机森林（Random Forest）模型，以信号强度为特征，预测下游基因的表达，从而量化特定配体-受体对对靶基因的调控重要性。",
+            "tool_intent": "量化信号对靶基因的调控影响",
+            "suggested_tools": ["Scikit-learn (Random Forest)", "COMMOT"],
+            "io_schema": {
+            "inputs": [
+                {
+                "name": "signaling_intensity",
+                "type": "VECTOR",
+                "description": "信号接收强度向量"
+                },
+                {
+                "name": "target_gene_expression",
+                "type": "VECTOR",
+                "description": "靶基因表达量"
+                }
+            ],
+            "outputs": [
+                {
+                "name": "feature_importance",
+                "type": "SCORE",
+                "description": "信号特征在预测靶基因表达中的重要性得分 (Gini Importance)"
+                }
+            ]
+            }
+        }
+        ]
+  }

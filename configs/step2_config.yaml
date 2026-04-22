@@ -1,42 +1,30 @@
 # Step2 配置: 工具信息注入
-# 在此文件中定义 Step2 的所有可配置参数
 
-# 数据路径
-data:
-  reasoning_xml_dir: "data/input"        # reasoning_chain.xml 所在目录
-  tools_json_dir: "data/input"           # _tools_extract_result.json 所在目录
-  step1_output_dir: "data/step1_output"  # Step1 输出目录（可选引用聚类结果）
-  output_dir: "data/step2_output"        # 输出目录
+# TOS 配置
+tos:
+  bucket: "wenyon-paper"
+  access_key: ""                         # 从环境变量 TOS_ACCESS_KEY 读取
+  secret_key: ""                         # 从环境变量 TOS_SECRET_KEY 读取
+  endpoint: "tos-s3-cn-beijing.volces.com"
+  region: "cn-beijing"
+  xml_source_prefix: "paper_ocr/xml/"    # reasoning_chain.xml 所在目录
+  md_prefix: "paper_ocr/md/"             # 论文 MD 文件所在目录
+  output_prefix: "paper_ocr/tools/v2/reasoning_chain_refine/"  # 输出目录
 
-# 工具匹配参数
-matching:
-  strategy: "hybrid"                     # 选项: text, semantic, evidence, hybrid
-  # 文本匹配参数
-  text:
-    case_sensitive: false                # 是否区分大小写
-    fuzzy_threshold: 0.8                 # 模糊匹配阈值
-  # 语义匹配参数
-  semantic:
-    model_name: "all-MiniLM-L6-v2"      # embedding 模型
-    similarity_threshold: 0.7           # 相似度阈值
-  # Evidence 匹配参数
-  evidence:
-    use_ptlink_evidence: true            # 使用 ptlink 的 evidence 字段
-  # 混合策略权重
-  hybrid:
-    text_weight: 0.3
-    semantic_weight: 0.4
-    evidence_weight: 0.3
-    min_confidence: 0.5                  # 最低置信度阈值
+# LLM 配置
+llm:
+  provider: "gpt5_mini"                  # 使用的 LLM provider（对应 config.yaml 中的 key）
+  temperature: 0.0
+  max_retries: 3
+  timeout: 120
 
-# XML 增强参数
-enrichment:
-  add_tool_refs: true                    # 在 <step> 中添加 <ref type="tool">
-  add_tools_section: true                # 在 <conclusion_reasoning> 末尾添加 <tools>
-  include_version_info: true             # 包含版本信息
-  max_desc_length: 2000                  # 工具描述最大长度
+# Prompt 配置
+prompt:
+  template_path: "prompts/step2_extract_tools.md"  # Prompt 模板路径
 
 # 运行参数
 runtime:
   verbose: true
-  batch_size: 100                        # 批量处理论文数
+  batch_size: 50                         # 批量处理论文数
+  max_workers: 300                        # 并发数
+  skip_existing: true                    # 跳过已存在的输出

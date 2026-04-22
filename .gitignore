@@ -53,3 +53,19 @@ Thumbs.db
 # Cache
 *.cache
 .cache/
+
+# Secrets & local env
+.env
+.env.*
+
+# Large / generated data (do not commit)
+data/cache/
+data/cache_random50k/
+data/lance_db/
+data/lance_db_random50k/
+data/step1_output_random50k/
+logs/
+
+# Misc
+.claude/scheduled_tasks.lock
+test_write.txt

@@ -1,0 +1,47 @@
+# Step1 配置: 随机5万条数据测试
+
+# 数据路径
+data:
+  mode: "random_sample"  # 新增模式：随机采样
+  sample_size: 50000
+  cache_dir: "data/cache_random50k"
+  output_dir: "data/step1_output_random50k"
+  lance_db_dir: "data/lance_db_random50k"
+  force_rebuild_ids: false
+  force_reload_chains: false
+  batch_size: 500
+  max_workers: 10
+  verbose: true
+
+# 向量化参数
+vectorizer:
+  api_url: "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+  access_key: ""  # 或设置环境变量 DASHSCOPE_API_KEY
+  model: "text-embedding-v1"
+  dimension: 1536
+  concurrency: 10
+  max_retries: 3
+  http_timeout: 60.0
+
+# 聚类参数
+clustering:
+  algorithm: "kmeans"
+  n_clusters: 30000
+  auto_k:
+    min_k: 5
+    max_k: 50
+    method: "silhouette"
+  umap:
+    enabled: false
+    n_components: 50
+    n_neighbors: 15
+    min_dist: 0.1
+    metric: 'cosine'
+  hdbscan:
+    min_cluster_size: 100
+    min_samples: 10
+
+# 运行参数
+runtime:
+  random_seed: 42
+  verbose: true

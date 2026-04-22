@@ -1,0 +1,25 @@
+providers:
+  gemini:
+    base_url: ""
+    api_key: ""
+    model: "litellm_proxy/gemini-3-pro-preview"
+  gpt5:
+    base_url: ""
+    api_key: ""
+    model: "Vendor2/GPT-5.2"
+  gpt5_mini:
+    base_url: ""
+    api_key: ""
+    model: "Vendor2/GPT-5.2-mini"
+  deepseek:
+    base_url: ""
+    api_key: ""
+    model: "DeepSeek/DeepSeek-V3-0324"
+  qwen:
+    base_url: ""
+    api_key: ""
+    model: "GpuGeek/Qwen3-VL-30B-A3B-Thinking"
+  doubao:
+    base_url: ""
+    api_key: ""
+    model: "Volcengine/Doubao-Seed-1.6"

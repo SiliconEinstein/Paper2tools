@@ -1,46 +1,47 @@
 # Step1 配置: 文本向量化与语义聚类
-# 在此文件中定义 Step1 的所有可配置参数
 
 # 数据路径
 data:
-  input_dir: "data/input"           # 输入数据目录
-  output_dir: "data/step1_output"   # 输出目录
-  file_pattern: "*.xml"             # 输入文件匹配模式
+  journal_config_path: "configs/domain_journals.yaml"
+  target_domain: "bioinformatics"
+  cache_dir: "data/cache"
+  output_dir: "data/step1_output"
+  lance_db_dir: "data/lance_db"
+  force_rebuild_ids: false
+  force_reload_chains: false
+  batch_size: 500
+  max_workers: 300
+  verbose: true
 
-# 向量化参数
+# 向量化参数（使用 gaia-lkm Embedder）
 vectorizer:
-  model_type: "sentence_transformer"  # 选项: sentence_transformer, openai, local
-  model_name: "all-MiniLM-L6-v2"     # 具体模型名
-  batch_size: 64                       # 批量向量化的 batch 大小
-  cache_dir: "data/step1_output/cache" # 向量缓存目录
-  max_text_length: 512                 # 最大文本长度（超过截断）
+  api_url: "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+  access_key: ""  # 或设置环境变量 DASHSCOPE_API_KEY
+  model: "text-embedding-v4"
+  dimension: 1024
+  concurrency: 50
+  max_retries: 5
+  http_timeout: 30
 
 # 聚类参数
 clustering:
-  algorithm: "kmeans"       # 选项: kmeans, dbscan, hierarchical, hdbscan
-  n_clusters: null          # 聚类数（null 则自动搜索）
-  auto_k:                   # 自动搜索 k 的参数
+  algorithm: "kmeans"
+  n_clusters: 30000
+  auto_k:
     min_k: 5
-    max_k: 50
-    method: "silhouette"    # 选项: silhouette, elbow
-  # DBSCAN 参数
-  dbscan:
-    eps: 0.5
-    min_samples: 5
-  # HDBSCAN 参数
+    max_k: 5000
+    method: "silhouette"
+  umap:
+    enabled: false
+    n_components: 50
+    n_neighbors: 15
+    min_dist: 0.1
+    metric: 'cosine'
   hdbscan:
-    min_cluster_size: 10
-    min_samples: 5
-
-# 文本预处理
-preprocessing:
-  strip_xml_tags: true       # 去除 XML 标签
-  normalize_whitespace: true # 规范化空白
-  lowercase: false           # 是否小写化
-  remove_stopwords: false    # 是否去停用词
+    min_cluster_size: 100
+    min_samples: 10
 
 # 运行参数
 runtime:
-  random_seed: 42            # 随机种子
-  verbose: true              # 是否打印详细信息
-  save_embeddings: true      # 是否保存向量
+  random_seed: 42
+  verbose: true

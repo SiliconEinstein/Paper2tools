@@ -1,36 +1,17 @@
-# Step3 配置: 工作流总结
-# 在此文件中定义 Step3 的所有可配置参数
+# Step3 配置: Workflow 提取
+# 从任意文本中提取结构化 workflow
 
 # 数据路径
 data:
-  enriched_xml_dir: "data/step2_output"  # Step2 输出的增强 XML 目录
-  tools_json_dir: "data/input"           # _tools_extract_result.json 所在目录
+  input_path: "data/input"               # 输入文件或目录（支持 .txt/.xml/.json/.md）
   output_dir: "data/step3_output"        # 输出目录
 
 # Workflow 提取参数
 extraction:
-  source: "ptlink"                       # 选项: ptlink, enriched_xml, both
-  include_single_tool: true              # 是否包含单工具 workflow
-  include_prereq: true                   # 是否包含 prereq 中的工具
-
-# Workflow 聚合参数
-aggregation:
-  similarity_method: "tool_sequence"     # 选项: tool_sequence, tool_set, semantic
-  similarity_threshold: 0.8             # 聚合相似度阈值
-  min_occurrences: 2                     # 最少出现次数（才被视为"典型"workflow）
-  # 工具名匹配
-  tool_matching:
-    use_alias: true                      # 使用工具别名进行匹配
-    fuzzy_threshold: 0.85               # 工具名模糊匹配阈值
-
-# 输出参数
-output:
-  format: "json"                         # 选项: json, yaml, markdown
-  include_examples: true                 # 是否包含示例论文
-  max_examples_per_workflow: 5          # 每个 workflow 最多保留几个示例
-  generate_summary: true                 # 是否生成自然语言描述
+  temperature: 0.3                       # LLM 温度参数（越低越稳定）
 
 # 运行参数
 runtime:
-  verbose: true
-  batch_size: 1000                       # 批量处理论文数
+  verbose: true                          # 是否打印详细进度
+  concurrency: 10                        # LLM 并发数
+  batch_size: 500                         # 批量处理文本数
