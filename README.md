@@ -1,39 +1,58 @@
-# Paper2tools
+# Paper2Tools v2
 
-学术论文推理步骤深度分析工具（paper2tools_v2）
+学术论文推理步骤深度分析系统 -- 从大规模论文中提取、聚类和总结科研工作流模式。
 
 ## 项目概述
 
-paper2tools_v2 是一个独立的分析工具，专注于学术论文中推理步骤的语义理解、工具关联和工作流总结。
+Paper2Tools v2 从学术论文的推理链（reasoning chain）出发，通过语义向量化、聚类和 LLM 驱动的信息提取，自动识别高频科研工作流模式及其关联工具。
 
-### 核心功能
+### 三阶段流水线
 
-- **Step1: 文本向量化与语义聚类** - 对推理步骤进行向量化并按语义相似度聚类
-- **Step2: 工具信息注入** - 在 reasoning_chain XML 中为每个推理步骤补充关联的工具信息
-- **Step3: 工作流总结** - 基于增强后的数据总结典型工作流模式
+| 阶段 | 功能 | 核心技术 |
+|------|------|----------|
+| **Step1** | 推理链向量化与聚类 | DashScope Embedding + KMeans |
+| **Step2** | 工具信息注入 | GPT-5-mini + XML 增强 |
+| **Step3** | 工作流结构化提取 | LLM + JSON Schema |
+
+```
+TOS 对象存储
+  ├─ paper_ocr/xml/*_reasoning_chain.xml
+  └─ paper_ocr/md/*.md
+       ↓
+Step1 → 向量化 → KMeans(k=30000) → Top 10% 簇 → 每簇最近 10 条
+       ↓
+Step2 → LLM 识别工具 → 注入 <ref type="tool"> → 上传 enriched XML
+       ↓
+Step3 → LLM 提取结构化工作流 → workflows.json
+```
 
 ## 快速开始
 
-### 安装依赖
+### 环境准备
 
 ```bash
 pip install -r requirements.txt
+
+# 配置环境变量 (.env)
+TOS_ACCESS_KEY=...
+TOS_SECRET_KEY=...
+LITELLM_PROXY_API_BASE=...
+LITELLM_PROXY_API_KEY=...
 ```
 
-### 运行示例
+### 运行
 
 ```bash
-# 运行 Step1: 文本向量化与聚类
+# 端到端运行（期刊数据集）
+python test_journal_embedding.py
+
+# 端到端运行（随机 5 万条）
+python run_random50k_streaming.py
+
+# 分步运行
 python -m src.main --step 1 --config configs/step1_config.yaml
-
-# 运行 Step2: 工具信息注入
 python -m src.main --step 2 --config configs/step2_config.yaml
-
-# 运行 Step3: 工作流总结
 python -m src.main --step 3 --config configs/step3_config.yaml
-
-# 运行全部步骤
-python -m src.main --step all
 ```
 
 ## 项目结构
@@ -41,79 +60,87 @@ python -m src.main --step all
 ```
 paper2tools_v2/
 ├── src/
-│   ├── step1/          # Step1: 文本向量化与聚类
-│   ├── step2/          # Step2: 工具信息注入
-│   ├── step3/          # Step3: 工作流总结
-│   ├── common/         # 共享工具模块
-│   └── main.py         # CLI 主入口
-├── tests/              # 单元测试
-├── data/               # 数据目录
-│   ├── input/          # 输入数据
-│   ├── step1_output/   # Step1 输出
-│   ├── step2_output/   # Step2 输出
-│   └── step3_output/   # Step3 输出
-├── configs/            # 配置文件
-└── notebooks/          # Jupyter notebooks
+│   ├── step1/                  # 向量化与聚类
+│   │   ├── data_loader.py      #   TOS 数据加载、XML 解析
+│   │   ├── vectorizer.py       #   DashScope Embedding 异步客户端
+│   │   ├── clustering.py       #   KMeans / HDBSCAN 聚类
+│   │   ├── cluster_selector.py #   Top 10% 簇 + 距离筛选
+│   │   └── pipeline.py         #   Step1 主流程
+│   ├── step2/                  # 工具信息注入
+│   │   ├── data_loader.py      #   XML + MD 数据加载
+│   │   ├── tool_extractor.py   #   LLM 工具识别
+│   │   ├── xml_enricher.py     #   XML 标签注入
+│   │   └── pipeline.py         #   Step2 主流程
+│   ├── step3/                  # 工作流提取
+│   │   ├── schema.py           #   Workflow 数据结构定义
+│   │   ├── workflow_extractor.py #  LLM 结构化提取
+│   │   └── pipeline.py         #   Step3 主流程
+│   ├── db/                     # LanceDB 向量数据库封装
+│   ├── models/                 # LLM Provider 配置
+│   └── main.py                 # CLI 入口
+├── configs/                    # YAML 配置文件
+│   ├── step1_config.yaml       #   期刊数据集配置
+│   ├── step1_random50k_config.yaml # 随机数据集配置
+│   ├── step2_config.yaml
+│   ├── step3_config.yaml
+│   └── domain_journals.yaml    #   期刊列表
+├── tests/                      # 单元测试
+├── data/                       # 数据与输出
+│   ├── cache/                  #   缓存文件
+│   ├── lance_db/               #   LanceDB 向量库
+│   └── step1_output/           #   聚类结果与选择结果
+├── notebooks/                  # 文档与分析
+│   └── PROJECT_OVERVIEW.md     #   项目策划书
+├── prompts/                    # LLM Prompt 模板
+└── requirements.txt
 ```
 
-## 数据流
+## 数据规模
 
+| 数据集 | 论文数 | 推理链数 | 向量维度 |
+|--------|--------|----------|----------|
+| 期刊 (bioinformatics) | ~62,000 | ~448,000 | 1024 |
+| 随机采样 | 50,000 | 待统计 | 1024 |
+
+## 配置说明
+
+所有参数通过 YAML 配置管理，核心参数：
+
+```yaml
+# Step1 聚类配置
+clustering:
+  algorithm: "kmeans"     # kmeans / hdbscan
+  n_clusters: 30000       # KMeans 簇数
+
+# Step1 向量化配置
+vectorizer:
+  model: "text-embedding-v4"
+  dimension: 1024
+  concurrency: 50         # 异步 worker 数
 ```
-输入数据 (data/input/)
-  ├─ reasoning_chain.xml
-  └─ _tools_extract_result.json
-       ↓
-Step1: 向量化与聚类
-  └─→ step_embeddings.npy, clusters.json
-       ↓
-Step2: 工具信息注入
-  └─→ reasoning_chain.enriched.xml
-       ↓
-Step3: 工作流总结
-  └─→ workflows.json, workflow_stats.json
-```
 
-## 配置
+## 技术栈
 
-每个步骤都有独立的配置文件：
-
-- `configs/step1_config.yaml` - Step1 配置（向量化模型、聚类算法等）
-- `configs/step2_config.yaml` - Step2 配置（匹配策略、置信度阈值等）
-- `configs/step3_config.yaml` - Step3 配置（聚合策略、输出格式等）
+- **向量化**: DashScope text-embedding-v4 (1024 维)
+- **聚类**: scikit-learn KMeans, HDBSCAN
+- **向量数据库**: LanceDB + PyArrow
+- **LLM**: GPT-5-mini (via LiteLLM Proxy)
+- **对象存储**: Volcengine TOS
+- **异步**: asyncio + httpx
 
 ## 测试
 
 ```bash
-# 运行所有测试
 pytest tests/
-
-# 运行特定模块测试
 pytest tests/test_step1/
 pytest tests/test_step2/
 pytest tests/test_step3/
 ```
 
-## 开发指南
+## 详细文档
 
-### 模块职责
-
-- **step1/vectorizer.py** - 封装多种 embedding 模型
-- **step1/clustering.py** - 实现聚类算法
-- **step2/tool_matcher.py** - 工具与步骤的匹配逻辑
-- **step2/xml_enricher.py** - XML 增强器
-- **step3/workflow_extractor.py** - 从单篇论文提取 workflow
-- **step3/workflow_aggregator.py** - 跨论文聚合 workflow
-
-### 代码风格
-
-- 使用 `pathlib.Path` 处理文件路径
-- 所有批处理操作打印进度信息
-- 函数和类都要有清晰的 docstring
-
-## 文档
-
-- `.claude/CLAUDE.md` - 项目经验法则和架构设计
-- `.claude/TRACE.md` - 开发过程日志
+- [项目策划书](notebooks/PROJECT_OVERVIEW.md) -- 完整技术方案与规划
+- `.claude/TRACE.md` -- 开发过程日志
 
 ## License
 
