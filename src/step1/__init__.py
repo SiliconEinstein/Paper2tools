@@ -9,16 +9,11 @@ from .vectorizer import (
     create_embedder,
     vectorize_reasoning_chains,
 )
-from .clustering import (
-    ClusteringAlgorithm,
-    KMeansClustering,
-    HDBSCANClustering,
-    ClusterResult,
-    create_clustering_algorithm,
-    cluster_steps,
-    save_cluster_results,
-)
 from .pipeline import run_step1_pipeline
+from .cluster_metadata import (
+    cluster_and_save_to_lance,
+    incremental_clustering,
+)
 
 __all__ = [
     "ReasoningChain",
@@ -26,12 +21,7 @@ __all__ = [
     "load_data_for_step1",
     "create_embedder",
     "vectorize_reasoning_chains",
-    "ClusteringAlgorithm",
-    "KMeansClustering",
-    "HDBSCANClustering",
-    "ClusterResult",
-    "create_clustering_algorithm",
-    "cluster_steps",
-    "save_cluster_results",
     "run_step1_pipeline",
+    "cluster_and_save_to_lance",
+    "incremental_clustering",
 ]

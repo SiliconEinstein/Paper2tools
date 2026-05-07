@@ -213,12 +213,11 @@ def load_reasoning_chains_from_tos(
 ) -> List[ReasoningChain]:
     """从 TOS 并行加载 reasoning_chain.xml 文件"""
     all_chains = []
-    failed_papers = []
+    papers_with_chains = 0
 
     def load_single_paper(paper_id: str) -> List[ReasoningChain]:
-        """加载单篇论文的思维链"""
+        """加载单篇论文的思维链；无 XML 或失败时静默返回空列表"""
         try:
-            # 使用 download_reasoning_xml 方法
             xml_content = tos_store.download_reasoning_xml(paper_id)
 
             if xml_content is None or not xml_content.strip():
@@ -227,13 +226,9 @@ def load_reasoning_chains_from_tos(
             journal = journal_mapping.get(paper_id, "Unknown")
             chains = parse_reasoning_chain_xml(xml_content, paper_id, journal)
             return chains
-        except Exception as e:
-            if verbose:
-                print(f"Failed to load paper {paper_id}: {e}")
-            failed_papers.append((paper_id, str(e)))
+        except Exception:
             return []
 
-    # 并行加载
     print(f"Loading reasoning chains from TOS (max_workers={max_workers})...")
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(load_single_paper, pid): pid for pid in paper_ids}
@@ -245,20 +240,22 @@ def load_reasoning_chains_from_tos(
 
         for future in futures_iter:
             chains = future.result()
+            if chains:
+                papers_with_chains += 1
             all_chains.extend(chains)
 
-    # 统计
-    print(f"\nLoading complete:")
-    print(f"  Total papers: {len(paper_ids)}")
-    print(f"  Successfully loaded: {len(paper_ids) - len(failed_papers)}")
-    print(f"  Failed: {len(failed_papers)}")
-    print(f"  Total reasoning chains: {len(all_chains)}")
+    n_skip = len(paper_ids) - papers_with_chains
+    print(f"\n加载完成:")
+    print(f"  请求论文数: {len(paper_ids)}")
+    print(f"  成功加载（至少 1 条思维链）: {papers_with_chains}")
+    print(f"  跳过（无 XML / 空内容 / 下载或解析失败）: {n_skip}")
+    print(f"  思维链条总数: {len(all_chains)}")
 
     if all_chains:
         total_steps = sum(len(chain.steps) for chain in all_chains)
         avg_steps = total_steps / len(all_chains)
-        print(f"  Total reasoning steps: {total_steps}")
-        print(f"  Avg steps per chain: {avg_steps:.2f}")
+        print(f"  思维步骤总数: {total_steps}")
+        print(f"  每条链平均步骤数: {avg_steps:.2f}")
 
     return all_chains
 
@@ -415,13 +412,47 @@ def load_data_for_step1(config: Dict) -> List[ReasoningChain]:
     print(f"Domain: {target_domain}")
     print(f"Journals ({len(journals)}): {journals}")
 
-    # 2. 初始化 TOS store 和 JournalMapper
+    cache_dir = Path(config['cache_dir'])
+    paper_ids_cache = cache_dir / f"paper_ids_{target_domain}.json"
+
+    # 2. 检查 paper_ids 缓存是否存在
+    if paper_ids_cache.exists() and not config.get('force_rebuild_ids', False):
+        print(f"\n✓ Found cached paper_id list: {paper_ids_cache}")
+        paper_ids, metadata = load_paper_id_list_from_cache(paper_ids_cache)
+        print(f"  Loaded {len(paper_ids)} paper IDs from cache")
+
+        # 跳过 JournalMapper 初始化，直接加载思维链
+        output_dir = Path(config['output_dir'])
+        chains_cache_path = output_dir / f"reasoning_chains_{target_domain}.jsonl"
+
+        if chains_cache_path.exists() and not config.get('force_reload_chains', False):
+            print(f"\n✓ Found cached reasoning chains: {chains_cache_path}")
+            return load_reasoning_chains_from_jsonl(chains_cache_path)
+
+        # 需要从 TOS 加载思维链，但不需要 journal_mapping
+        print(f"\nLoading reasoning chains from TOS (without journal mapping)...")
+        stage_config = StageConfig()
+        tos_store = LanceTosStore(stage_config)
+
+        chains = load_reasoning_chains_from_tos(
+            paper_ids=paper_ids,
+            journal_mapping={},  # 空映射，load_reasoning_chains_from_tos 会用 paper_id 推断 journal
+            tos_store=tos_store,
+            max_workers=config.get('max_workers', 10),
+            verbose=config.get('verbose', True)
+        )
+
+        # 保存到本地缓存
+        save_reasoning_chains_to_jsonl(chains, chains_cache_path)
+        return chains
+
+    # 3. 如果没有缓存，需要初始化 TOS store 和 JournalMapper
+    print(f"\nNo paper_ids cache found, building from journal mapping...")
     stage_config = StageConfig()
     tos_store = LanceTosStore(stage_config)
-    cache_dir = Path(config['cache_dir'])
     journal_mapper = JournalMapper(tos_store, cache_path=cache_dir / "journal_mapping.json")
 
-    # 3. 构建/加载 paper_id 列表
+    # 4. 构建/加载 paper_id 列表
     paper_ids, metadata = build_paper_id_list(
         journal_mapper=journal_mapper,
         target_journals=journals,
@@ -430,7 +461,7 @@ def load_data_for_step1(config: Dict) -> List[ReasoningChain]:
         force_rebuild=config.get('force_rebuild_ids', False)
     )
 
-    # 4. 检查是否有缓存的思维链数据
+    # 5. 检查是否有缓存的思维链数据
     output_dir = Path(config['output_dir'])
     chains_cache_path = output_dir / f"reasoning_chains_{target_domain}.jsonl"
 
@@ -438,7 +469,7 @@ def load_data_for_step1(config: Dict) -> List[ReasoningChain]:
         print(f"\nFound cached reasoning chains: {chains_cache_path}")
         return load_reasoning_chains_from_jsonl(chains_cache_path)
 
-    # 5. 从 TOS 加载思维链
+    # 6. 从 TOS 加载思维链
     print(f"\nLoading reasoning chains from TOS...")
     mapping = journal_mapper.load_or_build()
 
@@ -450,7 +481,7 @@ def load_data_for_step1(config: Dict) -> List[ReasoningChain]:
         verbose=config.get('verbose', True)
     )
 
-    # 6. 保存到本地缓存
+    # 7. 保存到本地缓存
     save_reasoning_chains_to_jsonl(chains, chains_cache_path)
 
     return chains

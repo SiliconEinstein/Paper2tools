@@ -1,0 +1,38 @@
+# Step4（random50k 流水线专用）：与 step4_config.yaml 结构相同，路径指向 random50k 产物
+# 用法示例：
+#   python run_chain_similarity_eval_report.py --config configs/step4_random50k_config.yaml
+#   或在代码中加载本文件后调用 run_step4_pipeline_async
+
+llm:
+  provider: "gpt5_mini"
+  temperature: 0.1
+
+prompt:
+  template_path: "prompts/step4_compare_workflows.md"
+
+data:
+  # Step3（random50k）：run_random50k_streaming.py → data/step3_output_random50k
+  workflows_dir: "data/step3_output_random50k"
+  output_dir: "data/step4_output_random50k"
+
+# 思维链相似度：Step1 random50k + Lance random50k
+chain_similarity:
+  enabled: true
+  selected_chains_path: "data/step1_output_random50k/selected_chains.json"
+  lancedb_path: "data/lance_db"
+  table_name: "chain_embeddings"
+  max_workers: 8
+  max_chars_per_chain: 8000
+  prompt:
+    template_path: "prompts/step4_evaluate_chain_similarity.md"
+  llm:
+    provider: "gpt5_mini"
+    temperature: 0.1
+
+runtime:
+  verbose: true
+  max_workers: 20
+  comparison_mode: "sampled"
+  max_comparisons: 400
+  random_seed: 42
+  max_json_chars_per_workflow: 24000

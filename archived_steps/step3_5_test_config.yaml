@@ -1,0 +1,16 @@
+# Step3.5 测试配置 - 只处理 2 个 workflow
+
+data:
+  input_path: data/step3.5_test/workflows_test.json
+  output_dir: data/step3.5_test_output
+
+runtime:
+  verbose: true
+  concurrency: 2
+  clear_output_dir: true
+
+generation:
+  temperature: 0.3
+  retry_temperature: 0.1
+  max_retries: 1
+  llm_provider: "gpt"

@@ -1,141 +1,209 @@
-"""Step3 主流程 - 串联数据加载→workflow 提取→保存"""
+"""
+Step3 主流程 - Workflow 检索系统
+"""
 
-import asyncio
-import json
 from pathlib import Path
 from typing import Dict, List
 
-from .data_loader import load_texts
-from .workflow_extractor import extract_workflow
-from .schema import Workflow
+from .index_builder import (
+    scan_workflow_directories,
+    generate_workflow_meta,
+    build_vector_index,
+    build_inverted_indexes,
+    build_workflow_registry
+)
+from .retriever import WorkflowRetriever
+from ..step1.vectorizer import create_embedder
 
 
-async def _extract_one(
-    index: int,
-    total: int,
-    text: str,
-    source_id: str,
-    temperature: float,
-    semaphore: asyncio.Semaphore,
-    verbose: bool,
-) -> Workflow | None:
-    """提取单个 workflow（受信号量控制）"""
-    async with semaphore:
-        if verbose:
-            print(f"  [{index}/{total}] 提取 {source_id}...")
+def build_index(config: Dict) -> Dict:
+    """
+    构建 workflow 检索索引
 
-        workflow = await extract_workflow(
-            text=text,
-            source_id=source_id,
-            temperature=temperature,
-        )
+    Args:
+        config: 配置字典
 
-        if workflow is not None:
-            if verbose:
-                print(f"    ✓ {source_id}: {len(workflow.steps)} 个步骤")
-        else:
-            if verbose:
-                print(f"    ✗ {source_id}: 未能提取 workflow")
+    Returns:
+        执行结果摘要
+    """
+    print("\n" + "=" * 60, flush=True)
+    print("Step3: Building Workflow Index", flush=True)
+    print("=" * 60, flush=True)
 
-        return workflow
+    index_config = config["index_building"]
+    workflow_dirs = index_config["workflow_dirs"]
+    index_dir = Path(index_config["index_dir"])
+    force_regenerate = index_config.get("force_regenerate_meta", False)
 
+    # 1. 扫描 workflow 目录
+    print("\n[1/5] Scanning workflow directories...", flush=True)
+    completed_workflows = scan_workflow_directories(workflow_dirs, verbose=True)
 
-async def _extract_all(
-    texts: list,
-    temperature: float,
-    concurrency: int,
-    verbose: bool,
-) -> List[Workflow]:
-    """并发提取 workflow"""
-    total = len(texts)
-    semaphore = asyncio.Semaphore(concurrency)
+    if not completed_workflows:
+        print("\n⚠ No completed workflows found. Exiting.", flush=True)
+        return {
+            "total_workflows": 0,
+            "index_dir": str(index_dir)
+        }
 
-    tasks = [
-        _extract_one(i, total, text, source_id, temperature, semaphore, verbose)
-        for i, (text, source_id) in enumerate(texts, 1)
-    ]
+    print(f"\n  ✓ Found {len(completed_workflows)} completed workflows", flush=True)
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # 2. 生成或读取 workflow_meta.json
+    print("\n[2/5] Generating workflow metadata...", flush=True)
+    workflow_metas = []
 
-    workflows = []
-    for r in results:
-        if isinstance(r, Workflow):
-            workflows.append(r)
-        elif isinstance(r, Exception):
-            if verbose:
-                print(f"    ✗ 异常: {r}")
+    for i, workflow_dir in enumerate(completed_workflows, 1):
+        print(f"  [{i}/{len(completed_workflows)}] {workflow_dir.name}...", flush=True)
 
-    return workflows
+        try:
+            meta = generate_workflow_meta(workflow_dir, force_regenerate=force_regenerate)
+            meta["workflow_dir"] = str(workflow_dir)
+            workflow_metas.append(meta)
+        except Exception as e:
+            print(f"    ✗ Failed: {e}", flush=True)
 
+    print(f"\n  ✓ Generated {len(workflow_metas)} workflow metadata", flush=True)
 
-def save_workflows(workflows: List[Workflow], output_dir: Path):
-    """保存 workflow 结果到 JSON 文件"""
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # 3. 构建向量索引
+    print("\n[3/5] Building vector index...", flush=True)
 
-    # 保存完整 workflow 库
-    library = [w.to_dict() for w in workflows]
-    output_path = output_dir / "workflows.json"
-    with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(library, f, ensure_ascii=False, indent=2)
+    embedder_config = index_config["embedder"]
+    embedder = create_embedder(embedder_config)
 
-    # 保存统计信息
-    stats = {
-        "total_workflows": len(workflows),
-        "total_steps": sum(len(w.steps) for w in workflows),
-        "avg_steps_per_workflow": (
-            sum(len(w.steps) for w in workflows) / len(workflows)
-            if workflows else 0
-        ),
+    build_vector_index(workflow_metas, index_dir, embedder, verbose=True)
+
+    # 4. 构建倒排索引
+    print("\n[4/5] Building inverted indexes...", flush=True)
+    build_inverted_indexes(workflow_metas, index_dir, verbose=True)
+
+    # 5. 构建 workflow 注册表
+    print("\n[5/5] Building workflow registry...", flush=True)
+    build_workflow_registry(workflow_metas, index_dir, verbose=True)
+
+    # 完成
+    print("\n" + "=" * 60, flush=True)
+    print("Index Building Complete!", flush=True)
+    print("=" * 60, flush=True)
+    print(f"\nIndex statistics:")
+    print(f"  Total workflows: {len(workflow_metas)}")
+    print(f"  Index directory: {index_dir}")
+    print(f"\nNext steps:")
+    print(f"  Run search queries:")
+    print(f"    python -m src.main --step 3 --action search --query \"your question\"")
+    print("=" * 60 + "\n", flush=True)
+
+    return {
+        "total_workflows": len(workflow_metas),
+        "index_dir": str(index_dir)
     }
-    stats_path = output_dir / "workflow_stats.json"
-    with open(stats_path, 'w', encoding='utf-8') as f:
-        json.dump(stats, f, ensure_ascii=False, indent=2)
 
 
-def run_step3_pipeline(config: Dict) -> List[Workflow]:
+def search_workflows(config: Dict, query: str, top_k: int = 5, domain: str = None) -> List[Dict]:
+    """
+    检索 workflows
+
+    Args:
+        config: 配置字典
+        query: 查询文本
+        top_k: 返回结果数量
+        domain: 限定领域（可选）
+
+    Returns:
+        检索结果列表
+    """
+    print("\n" + "=" * 60, flush=True)
+    print("Step3: Searching Workflows", flush=True)
+    print("=" * 60, flush=True)
+
+    index_dir = Path(config["index_building"]["index_dir"])
+
+    # 检查索引是否存在
+    if not index_dir.exists():
+        print(f"\n✗ Index not found: {index_dir}", flush=True)
+        print("  Please run: python -m src.main --step 3 --action build_index", flush=True)
+        return []
+
+    # 初始化检索器
+    print("\n[1/3] Initializing retriever...", flush=True)
+
+    embedder_config = config["index_building"]["embedder"]
+    embedder = create_embedder(embedder_config)
+
+    retrieval_config = config["retrieval"]
+
+    retriever = WorkflowRetriever(
+        index_dir=index_dir,
+        embedder=embedder,
+        config=retrieval_config
+    )
+
+    print("  ✓ Retriever initialized", flush=True)
+
+    # 执行检索
+    print(f"\n[2/3] Searching for: \"{query}\"", flush=True)
+    if domain:
+        print(f"  Domain filter: {domain}", flush=True)
+
+    results = retriever.retrieve(query, top_k=top_k, domain=domain)
+
+    print(f"  ✓ Found {len(results)} results", flush=True)
+
+    # 打印结果
+    print("\n[3/3] Results:", flush=True)
+    print("=" * 60, flush=True)
+
+    for i, result in enumerate(results, 1):
+        meta = result["workflow_meta"]
+        score = result["score"]
+        match_details = result["match_details"]
+
+        print(f"\n{i}. {meta['workflow_name']}", flush=True)
+        print(f"   Score: {score:.3f}", flush=True)
+        print(f"   Domain: {meta['domain']}", flush=True)
+        print(f"   Cluster: {meta['cluster_id']}", flush=True)
+        print(f"   Problem: {meta['problem_description']}", flush=True)
+        print(f"   Stages: {' → '.join(meta['main_stages'][:3])}", flush=True)
+        print(f"   Match details:", flush=True)
+        for source, source_score in match_details.items():
+            if source_score > 0:
+                print(f"     - {source}: {source_score:.3f}", flush=True)
+
+    print("\n" + "=" * 60 + "\n", flush=True)
+
+    # 清理
+    retriever.close()
+
+    return results
+
+
+def run_step3_pipeline(config: Dict, action: str = "build_index", **kwargs) -> Dict:
     """
     Step3 主流程入口
 
     Args:
-        config: 配置字典（从 step3_config.yaml 加载）
+        config: 配置字典
+        action: 操作类型 ("build_index" 或 "search")
+        **kwargs: 其他参数（如 query, top_k, domain）
 
     Returns:
-        提取到的 Workflow 列表
+        执行结果
     """
-    print("\n" + "=" * 60)
-    print("Step3 Pipeline: Workflow Extraction")
-    print("=" * 60)
+    if action == "build_index":
+        return build_index(config)
+    elif action == "search":
+        query = kwargs.get("query")
+        if not query:
+            raise ValueError("Query is required for search action")
 
-    verbose = config.get("runtime", {}).get("verbose", True)
-    temperature = config.get("extraction", {}).get("temperature", 0.3)
-    concurrency = config.get("runtime", {}).get("concurrency", 10)
-    input_path = Path(config["data"]["input_path"])
-    output_dir = Path(config["data"]["output_dir"])
+        top_k = kwargs.get("top_k", 5)
+        domain = kwargs.get("domain")
 
-    # 1. 加载文本
-    print("\n[1/3] Loading input texts...")
-    texts = load_texts(input_path)
-    print(f"  ✓ Loaded {len(texts)} text(s)")
+        results = search_workflows(config, query, top_k=top_k, domain=domain)
 
-    if not texts:
-        print("  ✗ No input texts found, exiting.")
-        return []
-
-    # 2. 提取 workflow
-    print("\n[2/3] Extracting workflows...")
-    print(f"  Concurrency: {concurrency}")
-    workflows = asyncio.run(_extract_all(texts, temperature, concurrency, verbose))
-    print(f"  ✓ Extracted {len(workflows)} workflow(s)")
-
-    # 3. 保存结果
-    print("\n[3/3] Saving results...")
-    save_workflows(workflows, output_dir)
-    print(f"  ✓ Results saved to {output_dir}")
-
-    print("\n" + "=" * 60)
-    print("Step3 Pipeline Complete!")
-    print(f"  Workflows: {len(workflows)}")
-    print(f"  Total steps: {sum(len(w.steps) for w in workflows)}")
-    print("=" * 60)
-
-    return workflows
+        return {
+            "query": query,
+            "total_results": len(results),
+            "results": results
+        }
+    else:
+        raise ValueError(f"Unknown action: {action}")

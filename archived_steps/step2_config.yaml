@@ -1,0 +1,35 @@
+# Step2 配置: 工具信息注入
+
+# TOS：桶名、密钥、endpoint 等见 .env（TOS_BUCKET、TOS_ACCESS_KEY、TOS_SECRET_KEY、TOS_ENDPOINT）
+tos:
+  region: "cn-beijing"
+  xml_source_prefix: "paper_ocr/xml/"    # reasoning_chain.xml 所在目录
+  md_prefix: "paper_ocr/md/"             # 论文 MD 文件所在目录
+  output_prefix: "paper_ocr/tools/v2/reasoning_chain_refine/"  # 输出目录
+
+# LLM 配置
+llm:
+  provider: "gpt5_mini"                  # 使用的 LLM provider（对应 config.yaml 中的 key）
+  temperature: 0.0
+  max_retries: 3
+  timeout: 120
+
+# Prompt 配置
+prompt:
+  template_path: "prompts/step2_extract_tools.md"  # Prompt 模板路径
+
+# 运行参数
+runtime:
+  verbose: true
+  batch_size: 50                         # 批量处理论文数
+  max_workers: 300                        # 全局 LLM 并发槽（所有论文、所有 conclusion 共用）
+  # 单篇论文内同时进行的 conclusion 抽取数。设为 1 时每篇最多占 1 槽，论文级并行≈max_workers；
+  # 设为 6 且每篇约 6 个 conclusion 时，易把「同时在跑 LLM 的论文数」压到约 max_workers/6。
+  max_conclusions_parallel: 1
+  # Step2 成功后写入本地 refine XML，供 Step3 按簇读取（含工具）；设 "" 可关闭
+  step2_local_output_dir: "data/step2_output"
+  # TOS SDK 同步调用所用线程池大小；默认 min(max(max_workers*2,128),512)；过小会拖慢 load/skip/upload
+  # tos_thread_workers: 512
+  skip_existing: true                    # 跳过已存在的输出
+  # 为 true 时：每条失败打印 [Step2][debug]；并打印示例输出对象键（便于核对 TOS 路径）
+  debug_step2: true

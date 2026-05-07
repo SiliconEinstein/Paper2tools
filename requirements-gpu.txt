@@ -1,0 +1,38 @@
+# GPU 聚类可选依赖：RAPIDS cuML（与 CUDA / 驱动 / Python 版本强绑定）
+# 官方安装向导（按你的 GPU、CUDA、Python 勾选后会生成精确命令）:
+#   https://docs.rapids.ai/install
+#
+# 系统要求摘要（以官方文档为准）:
+#   - Linux + NVIDIA GPU，算力 ≥ 7.0（Volta 及以后）
+#   - 驱动：CUDA 12 路线需 ≥ 525.60.13；CUDA 13 路线见官方表
+#   - pip 装 -cu12 轮子时，本机 CUDA toolkit 大版本应与 cuml-cu12 一致（见官方说明）
+#
+# ---------- 方式 A：pip（适合已有 CUDA 12 的 Python 环境）----------
+# 在 paper2tools_v2 所用虚拟环境里执行（示例装当前 cu12 线，版本号可按 PyPI 调整）:
+#
+#   pip install --extra-index-url=https://pypi.nvidia.com "cuml-cu12"
+#
+# 若需固定小版本（示例）:
+#
+#   pip install --extra-index-url=https://pypi.nvidia.com "cuml-cu12==26.4.*"
+#
+# CUDA 11.x 机器请改用 cuml-cu11（若你的驱动/工具链仍支持）:
+#
+#   pip install --extra-index-url=https://pypi.nvidia.com "cuml-cu11"
+#
+# ---------- 方式 B：conda / mamba（推荐，依赖由 channel 对齐）----------
+# 新建环境示例（版本请用官方 Release Selector 替换 25.02 / 12.4 等）:
+#
+#   conda create -y -n rapids -c rapidsai -c conda-forge \
+#     cuml cuda-version=12.4 python=3.11
+#   conda activate rapids
+#
+# 使用 mamba 时把 conda create 换成 mamba create 即可，channel 相同。
+#
+# ---------- 装好后自检 ----------
+#   python -c "from cuml.cluster import MiniBatchKMeans; print('cuML KMeans OK')"
+#   python -c "from cuml.cluster.hdbscan import HDBSCAN; print('cuML HDBSCAN OK')"
+#
+# 然后在 configs 里 clustering.device 使用 auto 或 gpu。
+# algorithm=hdbscan 时：auto/gpu 会优先用 cuML GPU HDBSCAN（度量仅欧氏；YAML 里 metric=cosine
+# 时会在 GPU 路径上对向量 L2 归一化后再聚类，见 pipeline.create_clustering_algorithm）。

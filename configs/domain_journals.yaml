@@ -14,4 +14,51 @@ bioinformatics:
     - "GigaScience"                             #    861 篇 | 大数据生物学
     - "Molecular Systems Biology"               #    817 篇 | 系统生物学
     - "Cell Systems"                            #    721 篇 | 系统生物学 (Cell子刊)
-    - "iMeta"                                   #     12 篇 | 元基因组/微生物组信息学
+
+# 超导领域（期刊名须与 batch_csv 中 pdf_path 段一致，常见为 IOP «Superconductivity»）
+superconductivity:
+  label: "超导"
+  journals:
+    - "Superconductivity"
+
+materials_science:
+  label: "材料科学"
+  journals:
+    - "Nature Materials"
+    - "Acta Materialia"
+    - "Chemistry of Materials"
+    - "Journal of Materials Science"
+    - "Computational Materials Science"
+
+environmental_science:
+  label: "环境科学"
+  journals:
+    - "Nature Sustainability"
+    - "Water Research"
+    - "Environmental Pollution"
+    - "Atmospheric Chemistry and Physics"
+    - "Journal of Hazardous Materials"
+
+
+mathematics:
+  label: "数学"
+  journals:
+    - "Annals of Mathematics"
+    - "Inventiones Mathematicae"
+    - "Journal of the American Mathematical Society"
+    - "Communications on Pure and Applied Mathematics"
+    - "SIAM Review"
+    - "SIAM Journal on Numerical Analysis"
+    - "Mathematics of Computation"
+    - "Numerische Mathematik"
+    - "Foundations of Computational Mathematics"
+
+fluid_mechanics:
+  label: "流体力学"
+  journals:
+    - "Journal of Fluid Mechanics"
+    - "Physics of Fluids"
+    - "International Journal of Multiphase Flow"
+    - "Journal of Computational Physics"
+    - "Computers & Fluids"
+    - "Experiments in Fluids"

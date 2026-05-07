@@ -69,3 +69,16 @@ logs/
 # Misc
 .claude/scheduled_tasks.lock
 test_write.txt
+
+# Domain pipeline: multi-GB chain dumps and downloaded workflows (keep paper_ids*.json / small stats)
+**/reasoning_chains*.jsonl
+data/*/workflows/
+data/*/cache/
+data/lance_db_backup/
+data/**/*.zip
+data/challenge/
+data/step4_output/
+data/workflow_index/
+data/step3_test_input.json
+data/workflow_judge_test_results.json
+data/workflow_judgments.json

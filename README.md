@@ -63,8 +63,8 @@ paper2tools_v2/
 │   ├── step1/                  # 向量化与聚类
 │   │   ├── data_loader.py      #   TOS 数据加载、XML 解析
 │   │   ├── vectorizer.py       #   DashScope Embedding 异步客户端
-│   │   ├── clustering.py       #   KMeans / HDBSCAN 聚类
-│   │   ├── cluster_selector.py #   Top 10% 簇 + 距离筛选
+│   │   ├── clustering.py       #   聚类对外唯一入口（API 由此导入）
+│   │   ├── cluster/            #   聚类实现（KMeans/HDBSCAN/凝聚/GPU/指标/选簇）
 │   │   └── pipeline.py         #   Step1 主流程
 │   ├── step2/                  # 工具信息注入
 │   │   ├── data_loader.py      #   XML + MD 数据加载

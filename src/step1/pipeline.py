@@ -3,30 +3,18 @@ Step1 主流程 - 串联数据加载→向量化→聚类→保存
 """
 
 import asyncio
-import numpy as np
+import json
 from pathlib import Path
 from typing import Dict
 
 from .data_loader import load_data_for_step1
 from .vectorizer import create_embedder, vectorize_reasoning_chains
-from .clustering import (
-    create_clustering_algorithm,
-    cluster_steps,
-    find_optimal_k,
-    save_cluster_results,
-    ClusterResult
-)
+from .cluster_metadata import cluster_and_save_to_lance
 from ..db import LanceVectorStore
+from ..db.schema import CLUSTER_METADATA_SCHEMA
 
 
-def read_all_vectors_from_store(vector_store: LanceVectorStore) -> np.ndarray:
-    """从 LanceDB 读取所有向量"""
-    arrow_table = vector_store.table.to_arrow()
-    vectors = np.array(arrow_table.column("vector").to_pylist(), dtype=np.float32)
-    return vectors
-
-
-async def run_step1_pipeline_async(config: Dict) -> ClusterResult:
+async def run_step1_pipeline_async(config: Dict) -> Dict:
     """
     Step1 主流程入口
 
@@ -34,96 +22,129 @@ async def run_step1_pipeline_async(config: Dict) -> ClusterResult:
         config: 配置字典（从 step1_config.yaml 加载）
 
     Returns:
-        ClusterResult: 聚类结果
+        Dict: 聚类结果摘要
     """
-    print("\n" + "=" * 60)
-    print("Step1 Pipeline: Text Vectorization & Semantic Clustering")
-    print("=" * 60)
+    print("\n" + "=" * 60, flush=True)
+    print("Step1 Pipeline: Text Vectorization & Semantic Clustering", flush=True)
+    print("=" * 60, flush=True)
 
     # 1. 初始化组件
-    print("\n[1/5] Initializing components...")
+    print("\n[1/5] Initializing components...", flush=True)
     vector_store = LanceVectorStore(
         db_path=Path(config["data"]["lance_db_dir"]),
         table_name="chain_embeddings"
     )
-    embedder = create_embedder(config["vectorizer"])
-    print("  ✓ Vector store and embedder initialized")
-
-    # 2. 加载数据
-    print("\n[2/5] Loading reasoning chains...")
-    chains = load_data_for_step1(config["data"])
-    print(f"  ✓ Loaded {len(chains)} reasoning chains")
-
-    # 复制 paper_id_list 到 step1_output（作为正式输出）
-    cache_dir = Path(config["data"]["cache_dir"])
-    output_dir = Path(config["data"]["output_dir"])
+    runtime_cfg = config.get("runtime", {})
+    skip_vectorization = bool(runtime_cfg.get("skip_vectorization", False))
     domain = config["data"].get("target_domain", config["data"].get("mode", "unknown"))
-    paper_list_cache = cache_dir / f"paper_ids_{domain}.json"
-    paper_list_output = output_dir / f"paper_ids_{domain}.json"
+    embedder = None
+    new_count = 0
 
-    if paper_list_cache.exists():
-        output_dir.mkdir(parents=True, exist_ok=True)
-        import shutil
-        shutil.copy2(paper_list_cache, paper_list_output)
-        print(f"  ✓ Paper ID list saved to {paper_list_output}")
+    if skip_vectorization:
+        print("  ✓ Vector store initialized (skip vectorization mode)", flush=True)
+        print("\n[2/5] Loading reasoning chains...", flush=True)
+        print("  ↷ Skipped (runtime.skip_vectorization=true)", flush=True)
+        print("\n[3/5] Vectorizing reasoning chains...", flush=True)
+        print("  ↷ Skipped (reuse existing vectors from LanceDB)", flush=True)
+    else:
+        embedder = create_embedder(config["vectorizer"])
+        print("  ✓ Vector store and embedder initialized", flush=True)
 
-    # 3. 向量化（增量，异步）
-    print("\n[3/5] Vectorizing reasoning chains...")
-    new_count = await vectorize_reasoning_chains(
-        chains=chains,
-        embedder=embedder,
-        vector_store=vector_store,
-        verbose=config["runtime"]["verbose"]
-    )
-    print(f"  ✓ Vectorized {new_count} new chains")
+        # 2. 加载数据
+        print("\n[2/5] Loading reasoning chains...", flush=True)
+        chains = load_data_for_step1(config["data"])
+        print(f"  ✓ Loaded {len(chains)} reasoning chains", flush=True)
+
+        # 复制 paper_id_list 到 step1_output（作为正式输出）
+        cache_dir = Path(config["data"]["cache_dir"])
+        output_dir = Path(config["data"]["output_dir"])
+        paper_list_cache = cache_dir / f"paper_ids_{domain}.json"
+        paper_list_output = output_dir / f"paper_ids_{domain}.json"
+
+        if paper_list_cache.exists():
+            output_dir.mkdir(parents=True, exist_ok=True)
+            import shutil
+            shutil.copy2(paper_list_cache, paper_list_output)
+            print(f"  ✓ Paper ID list saved to {paper_list_output}", flush=True)
+
+        # 3. 向量化（增量，异步）
+        print("\n[3/5] Vectorizing reasoning chains...", flush=True)
+        new_count = await vectorize_reasoning_chains(
+            chains=chains,
+            embedder=embedder,
+            vector_store=vector_store,
+            domain=domain,
+            tos_prefix=config["data"].get("tos_prefix", "paper_ocr"),
+            verbose=config["runtime"]["verbose"]
+        )
+        print(f"  ✓ Vectorized {new_count} new chains", flush=True)
 
     total = vector_store.count()
-    print(f"  ✓ Total vectors in LanceDB: {total}")
+    print(f"  ✓ Total vectors in LanceDB: {total}", flush=True)
 
-    # 4. 聚类
-    print("\n[4/5] Clustering reasoning chains...")
-    clustering_config = config["clustering"].copy()
+    # 4. 聚类并保存到 Lance
+    print("\n[4/5] Clustering reasoning chains...", flush=True)
+    clustering_config = config["clustering"]
 
-    # 如果 kmeans + n_clusters=null，先搜索最优 k
-    if clustering_config["algorithm"] == "kmeans" and clustering_config.get("n_clusters") is None:
-        print("  Auto-selecting optimal k...")
-        vectors = read_all_vectors_from_store(vector_store)
-        optimal_k = find_optimal_k(
-            vectors,
-            min_k=clustering_config["auto_k"]["min_k"],
-            max_k=clustering_config["auto_k"]["max_k"],
-            method=clustering_config["auto_k"]["method"]
-        )
-        print(f"  ✓ Auto-selected k={optimal_k}")
-        clustering_config["n_clusters"] = optimal_k
+    # 初始化聚类元数据存储
+    cluster_store = LanceVectorStore(
+        db_path=Path(config["data"]["lance_db_dir"]),
+        table_name=clustering_config.get("cluster_metadata_table", "cluster_metadata"),
+        schema=CLUSTER_METADATA_SCHEMA
+    )
 
-    algorithm = create_clustering_algorithm(clustering_config)
-
-    result = cluster_steps(
+    # 执行聚类并保存
+    agglomerative_config = clustering_config.get("agglomerative", {})
+    labels, n_clusters = cluster_and_save_to_lance(
         vector_store=vector_store,
-        algorithm=algorithm,
-        umap_config=clustering_config.get("umap"),
+        cluster_store=cluster_store,
+        domain=domain,
+        min_pair_sim=agglomerative_config.get("min_pair_sim", 0.6),
+        max_size=agglomerative_config.get("max_size", 300),
+        auto_evolve=agglomerative_config.get("auto_evolve", True),
+        evolve_threshold=agglomerative_config.get("evolve_threshold", 0.6),
+        evolve_step=agglomerative_config.get("evolve_step", 0.02),
         verbose=config["runtime"]["verbose"]
     )
-    print(f"  ✓ Clustering complete: {result.n_clusters} clusters")
 
-    # 5. 保存结果
-    print("\n[5/5] Saving results...")
+    cluster_store.close()
+    print(f"  ✓ Clustering complete: {n_clusters} clusters", flush=True)
+
+    # 5. 保存传统格式结果（可选，用于兼容性）
+    print("\n[5/5] Saving legacy format results...", flush=True)
     output_dir = Path(config["data"]["output_dir"])
-    save_cluster_results(result, output_dir)
-    print(f"  ✓ Results saved to {output_dir}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # 保存简化的聚类结果
+    legacy_result = {
+        "domain": domain,
+        "n_clusters": n_clusters,
+        "algorithm": "agglomerative",
+        "min_pair_sim": agglomerative_config.get("min_pair_sim", 0.6),
+        "total_chains": len(labels)
+    }
+    with open(output_dir / f"cluster_summary_{domain}.json", "w") as f:
+        json.dump(legacy_result, f, indent=2)
+
+    print(f"  ✓ Results saved to {output_dir}", flush=True)
 
     # 6. 清理
-    await embedder.close()
+    if embedder is not None:
+        await embedder.close()
     vector_store.close()
 
-    print("\n" + "=" * 60)
-    print("Step1 Pipeline Complete!")
-    print("=" * 60)
+    print("\n" + "=" * 60, flush=True)
+    print("Step1 Pipeline Complete!", flush=True)
+    print("=" * 60, flush=True)
 
-    return result
+    return {
+        "domain": domain,
+        "n_clusters": n_clusters,
+        "total_chains": len(labels),
+        "new_vectorized": new_count
+    }
 
 
-def run_step1_pipeline(config: Dict) -> ClusterResult:
+def run_step1_pipeline(config: Dict) -> Dict:
     """同步包装器，用于向后兼容"""
     return asyncio.run(run_step1_pipeline_async(config))

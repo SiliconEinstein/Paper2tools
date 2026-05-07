@@ -27,7 +27,7 @@ _DEFAULT_EMBED_API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/embe
 
 
 class DashScopeEmbedder:
-    """DashScope Embedding API 客户端，worker pool 限速 + jitter backoff"""
+    """DashScope Embedding API 客户端，支持批量请求 + worker pool 限速 + jitter backoff"""
 
     def __init__(self, config: Dict):
         self.api_url = (
@@ -44,7 +44,8 @@ class DashScopeEmbedder:
         self.n_workers = config.get("concurrency", 50)
         self.max_retries = config.get("max_retries", 5)
         self.timeout = config.get("http_timeout", 30)
-        self.max_text_length = config.get("max_text_length", 8000)  # 字符数限制
+        self.max_text_length = config.get("max_text_length", 8000)
+        self.api_batch_size = config.get("api_batch_size", 10)  # 每次 API 请求发送的文本数
 
         if not self.api_key:
             raise ValueError("DashScope API key not configured")
@@ -61,9 +62,9 @@ class DashScopeEmbedder:
             return text[:self.max_text_length]
         return text
 
-    async def _call_api(self, text: str) -> List[float]:
-        """单次 API 调用，带 jitter backoff 重试"""
-        text = self._truncate_text(text)
+    async def _call_api_batch(self, texts: List[str]) -> List[List[float]]:
+        """批量 API 调用（一次请求多条文本），带 jitter backoff 重试"""
+        texts = [self._truncate_text(t) for t in texts]
         last_exc = None
 
         for attempt in range(self.max_retries):
@@ -72,7 +73,7 @@ class DashScopeEmbedder:
                     self.api_url,
                     json={
                         "model": self.model,
-                        "input": [text],
+                        "input": texts,
                         "dimensions": self.dimension,
                         "encoding_format": "float"
                     },
@@ -82,12 +83,14 @@ class DashScopeEmbedder:
                 data = resp.json()
                 if "data" not in data:
                     raise ValueError(f"API returned no 'data' field: {data}")
-                return data["data"][0]["embedding"]
+
+                # 按 index 排序确保顺序正确
+                sorted_data = sorted(data["data"], key=lambda x: x["index"])
+                return [item["embedding"] for item in sorted_data]
 
             except (httpx.HTTPError, KeyError, ValueError) as exc:
                 last_exc = exc
                 if attempt < self.max_retries - 1:
-                    # Jitter backoff: 0.5s, 1.5s, 3.5s, 7.5s...
                     delay = (0.5 * (2 ** attempt)) + random.uniform(0, 0.5)
                     await asyncio.sleep(delay)
 
@@ -99,7 +102,7 @@ class DashScopeEmbedder:
         on_result,
         on_error
     ):
-        """Worker pool 并发处理，限速"""
+        """Worker pool 并发处理，每个 worker 批量调用 API"""
         queue = asyncio.Queue()
         for item in items:
             queue.put_nowait(item)
@@ -108,15 +111,27 @@ class DashScopeEmbedder:
 
         async def worker():
             while True:
-                item = await queue.get()
-                if item is None:
+                # 收集一批任务
+                batch = []
+                for _ in range(self.api_batch_size):
+                    item = await queue.get()
+                    if item is None:
+                        await queue.put(None)  # 放回 sentinel
+                        break
+                    batch.append(item)
+
+                if not batch:
                     return
-                chain_id, chain_text, metadata = item
+
+                # 批量调用 API
                 try:
-                    vector = await self._call_api(chain_text)
-                    await on_result(chain_id, vector, metadata)
+                    texts = [item[1] for item in batch]
+                    vectors = await self._call_api_batch(texts)
+                    for (chain_id, _, metadata), vector in zip(batch, vectors):
+                        await on_result(chain_id, vector, metadata)
                 except Exception as exc:
-                    await on_error(chain_id, exc)
+                    for chain_id, _, _ in batch:
+                        await on_error(chain_id, exc)
 
         await asyncio.gather(*[worker() for _ in range(self.n_workers)])
 
@@ -132,6 +147,8 @@ async def vectorize_reasoning_chains(
     chains: List[ReasoningChain],
     embedder: DashScopeEmbedder,
     vector_store: LanceVectorStore,
+    domain: str = "",
+    tos_prefix: str = "paper_ocr",
     batch_size: int = 5000,
     verbose: bool = True
 ) -> int:
@@ -149,8 +166,11 @@ async def vectorize_reasoning_chains(
             {
                 "paper_id": chain.paper_id,
                 "journal": chain.journal,
+                "domain": domain,
                 "conclusion_id": chain.conclusion_id,
                 "conclusion_title": chain.conclusion_title,
+                "xml_path": f"{tos_prefix}/xml/{chain.paper_id}_{chain.conclusion_id}.xml",
+                "md_path": f"{tos_prefix}/md/{chain.paper_id}.md",
                 "chain_text": chain_text[:2000],
                 "cluster_id": -1,
                 "num_steps": len(chain.steps),
@@ -162,9 +182,12 @@ async def vectorize_reasoning_chains(
     if verbose:
         print(f"\nTotal chains: {len(all_chains)}")
 
-    # 2. 过滤已存在的
+    # 2. 过滤已存在的（只读 chain_id 列，按 domain 过滤）
     try:
-        arrow_table = vector_store.table.to_arrow()
+        search = vector_store.table.search()
+        if domain:
+            search = search.where(f"domain = '{domain}'")
+        arrow_table = search.select(["chain_id"]).limit(999999999).to_arrow()
         existing_ids = set(arrow_table.column("chain_id").to_pylist())
     except Exception:
         existing_ids = set()
@@ -206,12 +229,15 @@ async def vectorize_reasoning_chains(
 
         await embedder.embed_batch(items, on_result, on_error)
 
-        # 写入 LanceDB
-        for cid, (vector, meta) in results.items():
+        # 批量写入 LanceDB（整 chunk 一次性写入，而非逐条）
+        if results:
+            ids_list = list(results.keys())
+            vectors_list = [results[cid][0] for cid in ids_list]
+            metadata_list = [results[cid][1] for cid in ids_list]
             vector_store.add_vectors(
-                [cid],
-                np.array([vector], dtype=np.float32),
-                [meta]
+                ids_list,
+                np.array(vectors_list, dtype=np.float32),
+                metadata_list
             )
         vector_store.flush()
 

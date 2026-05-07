@@ -1,17 +1,72 @@
-# Step3 配置: Workflow 提取
-# 从任意文本中提取结构化 workflow
+# Step3 配置: Workflow 检索系统
 
-# 数据路径
-data:
-  input_path: "data/input"               # 输入文件或目录（支持 .txt/.xml/.json/.md）
-  output_dir: "data/step3_output"        # 输出目录
+# 索引构建
+index_building:
+  # 扫描的 workflow 目录
+  workflow_dirs:
+    - "data/bioinformatics/workflows"
+    - "data/Superconductivity/workflows_top50"
+    - "data/materials_science/workflows"
 
-# Workflow 提取参数
-extraction:
-  temperature: 0.3                       # LLM 温度参数（越低越稳定）
+  # 输出索引目录
+  index_dir: "data/workflow_index"
+
+  # 是否强制重新生成 workflow_meta.json（即使已存在）
+  force_regenerate_meta: false
+
+  # Embedding 配置（复用 Step1）
+  embedder:
+    model: "text-embedding-v4"
+    dimension: 1024
+    api_url: null  # 从环境变量读取
+    api_key: null  # 从环境变量读取
+
+# 检索配置
+retrieval:
+  # 多路召回的 top-k（每路）
+  recall_top_k: 20
+
+  # 融合权重
+  weights:
+    semantic: 0.4
+    keyword: 0.2
+    io_type: 0.2
+    method: 0.1
+    quality: 0.1
+
+  # LLM 精排序
+  llm_rerank:
+    enabled: true
+    threshold: 0.7
+    model: "gpt5_mini"
+
+  # 关键词提取
+  keyword_extraction:
+    min_length: 2
+    stopwords: ["的", "了", "和", "是", "在", "有", "与", "及", "等", "中", "对", "为", "以", "从", "到", "用", "by", "the", "a", "an", "and", "or", "of", "in", "on", "at", "to", "for", "with", "from"]
+
+  # 数据类型识别（规则）
+  data_type_patterns:
+    - pattern: "RNA-?seq|转录组"
+      type: "RNA-seq_data"
+    - pattern: "microarray|微阵列|芯片"
+      type: "microarray_data"
+    - pattern: "qRT-?PCR|实时荧光定量"
+      type: "qRT-PCR_data"
+    - pattern: "超导磁体|superconducting magnet"
+      type: "superconducting_magnet"
+    - pattern: "霍尔探针|Hall probe|Hall sensor"
+      type: "hall_sensor"
+
+  # 方法名识别（规则）
+  method_patterns:
+    - pattern: "qRT-?PCR|实时荧光定量PCR"
+      method: "qRT-PCR"
+    - pattern: "霍尔探针|Hall probe"
+      method: "Hall probe scanning"
+    - pattern: "磁场测量|field measurement|field mapping"
+      method: "field mapping"
 
 # 运行参数
 runtime:
-  verbose: true                          # 是否打印详细进度
-  concurrency: 10                        # LLM 并发数
-  batch_size: 500                         # 批量处理文本数
+  verbose: true

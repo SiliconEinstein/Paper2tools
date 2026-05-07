@@ -1,26 +1,55 @@
-# Step2 配置: 工具信息注入
+# Step2 配置: 从聚类到 Workflow 提取
 
-# TOS：桶名、密钥、endpoint 等见 .env（TOS_BUCKET、TOS_ACCESS_KEY、TOS_SECRET_KEY、TOS_ENDPOINT）
-tos:
+# 数据路径
+data:
+  lance_db_dir: "data/lance_db"
+  cluster_metadata_table: "cluster_metadata"
+  output_dir: "data/{domain}/workflows"  # {domain} 会被替换为实际领域名
+
+# 聚类选择
+cluster_selection:
+  domain: "bioinformatics"
+
+  # 可选：只处理指定的聚类 ID（null 表示处理所有）
+  cluster_ids: null
+  # 示例：只处理 cluster 0, 5, 10
+  # cluster_ids: [0, 5, 10]
+
+  # 可选：按聚类大小过滤
+  min_chains: 10      # 最少 10 条链
+  max_chains: 500     # 最多 500 条链
+
+  # 可选：按质量指标过滤
+  min_intra_similarity: 0.5  # 簇内平均相似度 >= 0.5
+
+# 文件下载（从 TOS）
+file_download:
+  # TOS 配置（优先使用环境变量 TOS_BUCKET, TOS_ENDPOINT, TOS_ACCESS_KEY, TOS_SECRET_KEY, TOS_REGION）
+  bucket: "paper-ocr"
+  endpoint: "tos-cn-beijing.volces.com"
   region: "cn-beijing"
-  xml_source_prefix: "paper_ocr/xml/"    # reasoning_chain.xml 所在目录
-  md_prefix: "paper_ocr/md/"             # 论文 MD 文件所在目录
-  output_prefix: "paper_ocr/tools/v2/reasoning_chain_refine/"  # 输出目录
+  access_key: ""  # 留空，从环境变量读取
+  secret_key: ""  # 留空，从环境变量读取
 
-# LLM 配置
-llm:
-  provider: "gpt5_mini"                  # 使用的 LLM provider（对应 config.yaml 中的 key）
-  temperature: 0.0
-  max_retries: 3
-  timeout: 120
+  # 文件路径前缀
+  xml_prefix: "paper_ocr/xml/"
+  md_prefix: "paper_ocr/md/"
 
-# Prompt 配置
-prompt:
-  template_path: "prompts/step2_extract_tools.md"  # Prompt 模板路径
+  # 下载参数
+  max_workers: 10      # 并发下载线程数
+  retry_times: 3       # 失败重试次数
+  cache_dir: "data/cache/tos_files"  # 本地缓存目录（未实现）
+
+# 任务生成
+task_generation:
+  mode: "sequential"  # sequential: 顺序执行; parallel: 并行执行（生成多个脚本）
+  output_script: "run_workflows.sh"  # 输出脚本名称
+
+  # 可选：为每个任务设置资源限制（仅作为文档说明，不强制执行）
+  per_task_budget:
+    max_tokens: 200000      # 每个 Workflower 任务的最大 token 数
+    timeout_minutes: 60     # 每个任务的超时时间（分钟）
 
 # 运行参数
 runtime:
   verbose: true
-  batch_size: 50                         # 批量处理论文数
-  max_workers: 300                        # 并发数
-  skip_existing: true                    # 跳过已存在的输出

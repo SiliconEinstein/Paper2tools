@@ -7,6 +7,7 @@ data:
   cache_dir: "data/cache"
   output_dir: "data/step1_output"
   lance_db_dir: "data/lance_db"
+  tos_prefix: "paper_ocr"  # TOS 存储前缀
   force_rebuild_ids: false
   force_reload_chains: false
   batch_size: 500
@@ -16,19 +17,29 @@ data:
 # 向量化参数（API_URL / ACCESS_KEY / DASHSCOPE_API_KEY 见 .env）
 vectorizer:
   model: "text-embedding-v4"
-  dimension: 1024
-  concurrency: 50
+  dimension: 512
+  concurrency: 10
   max_retries: 5
   http_timeout: 30
+  api_batch_size: 5
 
 # 聚类参数
 clustering:
-  algorithm: "kmeans"
-  n_clusters: 30000
+  algorithm: "agglomerative"
+  device: cpu
+  n_clusters: 10000
   auto_k:
     min_k: 5
     max_k: 5000
     method: "silhouette"
+  agglomerative:
+    min_pair_sim: 0.6          # 初始阈值
+    max_size: 300              # 每个簇最大思维链数
+    auto_evolve: true          # 自动进化阈值
+    evolve_threshold: 0.6      # 触发进化的大簇比例（60%的簇超过max_size）
+    evolve_step: 0.02          # 每次进化的阈值增量
+    micro_k: 5000              # 两阶段聚类的微簇数量
+  cluster_metadata_table: "cluster_metadata"  # 聚类元数据表名
   umap:
     enabled: false
     n_components: 50
@@ -38,6 +49,20 @@ clustering:
   hdbscan:
     min_cluster_size: 100
     min_samples: 10
+  # 聚类后基于余弦相似度的质量估计（子样本，避免全量 O(n²)）
+  cosine_metrics:
+    enabled: true
+    subsample_n: 20000
+    max_points_per_cluster: 32
+    cosine_split_threshold: 0.85
+    sim_block_rows: 256
+    random_state: 42
+  # 聚类后对「大簇」的抽样：按簇大小排序取前 top_percent，每簇最多 max_per_cluster 条链
+  selection:
+    top_percent: 1.0
+    max_per_cluster: 50
+    top_n_clusters: 20
+    required_clusters: [37]
 
 # 运行参数
 runtime:

@@ -1,0 +1,31 @@
+# Step3 配置: Workflow 提取
+# 从任意文本中提取结构化 workflow
+# 若 input_path 为 Step1 的 selected_chains.json（数组且含 cluster_id），则按簇拆分：
+#   每簇 1 次 LLM → 1 个 workflow（与「每簇一个 workflow」一致）。
+
+# 数据路径
+data:
+  input_path: "data/input"               # 输入文件或目录（支持 .txt/.xml/.json/.md）
+  output_dir: "data/step3_output"        # 输出目录
+  workflows_base_dir: "data/workflows"   # workflow 文件夹根目录（保存 workflow.json 到 cluster 文件夹）
+  # Step2 refine：与 selected_chains 联用时用于带工具的正文
+  # true 时从 TOS 读取 tos://wenyon-paper/paper_ocr/tools/v2/reasoning_chain_refine/（凭证见 .env）
+  step2_enrich_from_tos: true
+  tos:
+    bucket: "wenyon-paper"               # 可被环境变量 TOS_BUCKET 覆盖
+    output_prefix: "paper_ocr/tools/v2/reasoning_chain_refine/"
+  # 本地目录可选：TOS 拉取失败时回退；不设或无效则仅用 chain_text
+  step2_enriched_dir: "data/step2_output"
+  # 也可改用 Step2 整份配置中的 tos 段：step2_config_path: "configs/step2_config.yaml"
+
+# Workflow 提取参数
+extraction:
+  temperature: 0.3                       # LLM 温度参数（越低越稳定）
+
+# 运行参数
+runtime:
+  verbose: true                          # 是否打印详细进度
+  concurrency: 10                        # LLM 并发数
+  batch_size: 500                         # 批量处理文本数
+  # 为 true 时每次 Step3 开始前清空 workflows/*.json（整轮重跑）；false 可保留已有单文件做续跑（慎用重复簇）
+  clear_workflows_dir: true

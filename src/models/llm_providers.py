@@ -138,7 +138,8 @@ async def gpt5_mini_completion(
         max_completion_tokens=kwargs.pop("max_tokens", 65535),
         **kwargs
     )
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    return content or ""
 
 
 @_llm_retry
@@ -172,7 +173,8 @@ async def gpt_completion(
         max_completion_tokens=kwargs.pop("max_tokens", 65535),
         **kwargs
     )
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    return content or ""
 
 
 # ============================================================================
@@ -218,4 +220,6 @@ async def gemini_completion(prompt: str, **kwargs) -> str:
         messages=messages,
         **kwargs
     )
-    return response["choices"][0]["message"]["content"]
+    msg = response["choices"][0]["message"]
+    content = msg.get("content") if isinstance(msg, dict) else None
+    return content or ""

@@ -1,0 +1,38 @@
+# Step4: (1) Workflow 成对质量评估 （2）簇内选中思维链相似度 — 二者独立、分目录产出
+
+llm:
+  provider: "gpt5_mini"
+  temperature: 0.1
+
+prompt:
+  template_path: "prompts/step4_compare_workflows.md"
+
+data:
+  # Step3 产物：优先读 workflows/*.json；若无则读 workflows.json
+  workflows_dir: "data/step3_output"
+  output_dir: "data/step4_output"
+
+# 思维链相似度：读 Step1 selected_chains + Lance 向量；产出 data/step4_output/chain_similarity/*
+chain_similarity:
+  enabled: true
+  selected_chains_path: "data/step1_output/selected_chains.json"
+  lancedb_path: "data/lance_db"
+  table_name: "chain_embeddings"
+  max_workers: 8
+  max_chars_per_chain: 8000
+  prompt:
+    template_path: "prompts/step4_evaluate_chain_similarity.md"
+  # 不填则沿用顶层 llm
+  llm:
+    provider: "gpt5_mini"
+    temperature: 0.1
+
+runtime:
+  verbose: true
+  max_workers: 20
+  # 成对采样：unique 无序对 (i,j)，总数约 C(N,2)；超过上限则随机采样
+  comparison_mode: "sampled"   # sampled | exhaustive（N 较小时可全开）
+  max_comparisons: 400
+  random_seed: 42
+  # 写入单条 prompt 时每个 workflow JSON 的最大字符（防超长）
+  max_json_chars_per_workflow: 24000

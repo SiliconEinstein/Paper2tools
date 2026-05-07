@@ -43,18 +43,24 @@ CHAIN_EMBEDDING_SCHEMA = pa.schema([
 
     # 论文元数据
     pa.field("paper_id", pa.string()),
-    pa.field("journal", pa.string()),
+    pa.field("journal", pa.string()),           # 原始期刊名（细粒度，必填）
+    pa.field("domain", pa.string()),            # 领域标签（粗粒度，可选，允许空字符串）
     pa.field("conclusion_id", pa.string()),
     pa.field("conclusion_title", pa.string()),
+
+    # 文件路径（完整路径，用于后续检索和加载）
+    pa.field("xml_path", pa.string()),          # 如: "tos://paper_ocr/xml/1234567890_c1.xml"
+    pa.field("md_path", pa.string()),           # 如: "tos://paper_ocr/md/1234567890.md"
 
     # 思维链完整文本（所有 step 拼接）
     pa.field("chain_text", pa.string()),
 
     # Embedding 向量
-    # 维度: 1536 (DashScope text-embedding-v1)
+    # 维度: 512 (DashScope text-embedding-v4) 或 1536 (text-embedding-v1)
     pa.field("vector", pa.list_(pa.float32())),
 
     # 聚类标签（初始为 -1，表示未聚类）
+    # 注意：cluster_id 是领域内的局部 ID，不同领域可以有相同的 cluster_id
     pa.field("cluster_id", pa.int32()),
 
     # 思维链统计信息
@@ -65,6 +71,45 @@ CHAIN_EMBEDDING_SCHEMA = pa.schema([
 
 # 保留旧名称作为别名，向后兼容
 STEP_EMBEDDING_SCHEMA = CHAIN_EMBEDDING_SCHEMA
+
+
+# ============================================================================
+# Step1: 聚类元数据存储（新增）
+# ============================================================================
+
+CLUSTER_METADATA_SCHEMA = pa.schema([
+    # 主键：全局唯一的聚类ID
+    # 格式: {domain}_{cluster_idx}
+    # 例: "bioinformatics_0", "materials_science_42"
+    pa.field("global_cluster_id", pa.string()),
+
+    # 领域信息
+    pa.field("domain", pa.string()),
+    pa.field("local_cluster_id", pa.int32()),  # 领域内的局部ID
+
+    # 聚类统计
+    pa.field("num_chains", pa.int32()),        # 包含的思维链数量
+    pa.field("num_papers", pa.int32()),        # 包含的论文数量
+
+    # 聚类成员（路径列表）
+    pa.field("chain_xml_paths", pa.list_(pa.string())),  # 所有思维链的XML路径
+    pa.field("paper_ids", pa.list_(pa.string())),        # 去重后的paper_id列表
+    pa.field("paper_md_paths", pa.list_(pa.string())),   # 对应的MD文件路径
+
+    # 聚类质心
+    pa.field("centroid", pa.list_(pa.float32())),
+
+    # 聚类质量指标
+    pa.field("avg_intra_similarity", pa.float32()),  # 簇内平均相似度
+    pa.field("min_intra_similarity", pa.float32()),  # 簇内最小相似度
+
+    # 聚类参数（用于增量更新）
+    pa.field("min_pair_sim_threshold", pa.float32()),  # 创建时使用的阈值
+
+    # 时间戳
+    pa.field("created_at", pa.timestamp('us')),
+    pa.field("last_updated", pa.timestamp('us')),
+])
 
 
 # ============================================================================
@@ -145,6 +190,48 @@ TOOL_MATCH_SCHEMA = pa.schema([
 
 
 # ============================================================================
+# Step3: Workflow Embedding 向量存储
+# ============================================================================
+
+WORKFLOW_EMBEDDING_SCHEMA = pa.schema([
+    # 主键：全局唯一的 workflow ID
+    # 格式: {domain}_{cluster_id}
+    # 例: "bioinformatics_cluster_6", "Superconductivity_cluster_60"
+    pa.field("workflow_id", pa.string()),
+
+    # 聚类信息
+    pa.field("cluster_id", pa.string()),       # "cluster_6"
+    pa.field("domain", pa.string()),           # "bioinformatics"
+
+    # Workflow 基本信息
+    pa.field("workflow_name", pa.string()),
+    pa.field("workflow_name_en", pa.string()),
+    pa.field("problem_description", pa.string()),
+    pa.field("problem_description_en", pa.string()),
+
+    # Embedding 向量（problem_description 的向量）
+    pa.field("vector", pa.list_(pa.float32(), list_size=1024)),
+
+    # 检索字段
+    pa.field("keywords", pa.list_(pa.string())),
+    pa.field("keywords_en", pa.list_(pa.string())),
+    pa.field("input_types", pa.list_(pa.string())),
+    pa.field("output_types", pa.list_(pa.string())),
+    pa.field("key_methods", pa.string()),      # JSON string: [{"name": "...", "frequency": 0.8}, ...]
+    pa.field("main_stages", pa.list_(pa.string())),
+
+    # 统计信息
+    pa.field("num_papers", pa.int32()),
+    pa.field("num_chains", pa.int32()),
+    pa.field("avg_intra_similarity", pa.float32()),
+
+    # 元数据
+    pa.field("creation_date", pa.string()),
+    pa.field("workflow_dir", pa.string()),     # 完整路径
+])
+
+
+# ============================================================================
 # 辅助函数
 # ============================================================================
 
@@ -164,9 +251,11 @@ def get_schema_by_name(schema_name: str) -> pa.Schema:
     schemas = {
         "step_embedding": STEP_EMBEDDING_SCHEMA,
         "chain_embedding": CHAIN_EMBEDDING_SCHEMA,
+        "cluster_metadata": CLUSTER_METADATA_SCHEMA,
         "cluster_center": CLUSTER_CENTER_SCHEMA,
         "progress_tracker": PROGRESS_TRACKER_SCHEMA,
         "tool_match": TOOL_MATCH_SCHEMA,
+        "workflow_embedding": WORKFLOW_EMBEDDING_SCHEMA,
     }
 
     if schema_name not in schemas:

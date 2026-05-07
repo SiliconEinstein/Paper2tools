@@ -1,0 +1,17 @@
+# Step3.5: Workflow 代码生成
+# 将 Step3 的 JSON 规范转化为可执行 Python 代码
+
+data:
+  input_path: data/step3_output/workflows.json
+  output_dir: data/step3.5_output
+
+runtime:
+  verbose: true
+  concurrency: 5
+  clear_output_dir: false  # true = 清空重新生成; false = 增量
+
+generation:
+  temperature: 0.3
+  retry_temperature: 0.1
+  max_retries: 1
+  llm_provider: "gpt"  # gpt_completion (GPT-5.2)
