@@ -8,18 +8,12 @@ language: zh-CN
 
 ## 功能概述
 
-**合并原 04_workflow_documenter + 05_review_writer**
-
 一次性完成：
 1. 生成 3 层工作流文档（workflow_3layer.md）
 2. 撰写中文 LaTeX 综述（review.tex）
-3. 生成决策树可视化（decision_tree.dot/png/pdf）
+3. 生成决策树可视化（decision_tree.dot/png）
 4. 编译 PDF（如环境支持）
-
-**优化点**：
-- 只读取 paper_extractions.yaml **一次**（原方案读 2 次）
-- 只读取 workflow_structure.json **一次**（原方案读 2 次）
-- 所有输出文件一次性生成，减少上下文切换
+5. 清理中间文件
 
 ## 输入要求
 
@@ -57,18 +51,7 @@ language: zh-CN
 
 ### Step 1: 一次性读取所有输入文件
 
-```python
-# 一次性读取，避免重复 I/O
-paper_extractions = load_yaml("paper_extractions.yaml")
-workflow_structure = load_json("workflow_structure.json")
-step_statistics = load_json("step_statistics.json")
-chain_classification = load_json("chain_classification.json")
-review_plan = load_json("review_plan.json")
-paper_mapping = load_json("paper_mapping.json")  # 新增
-
-# 批量获取论文标题（一次命令）
-paper_titles = extract_titles_from_md("md/")
-```
+读取所有必需的输入文件，避免重复 I/O。
 
 ### Step 2: 生成 3 层工作流文档
 
@@ -146,38 +129,28 @@ paper_titles = extract_titles_from_md("md/")
 
 #### Preamble 配置
 
-**必须使用系统可用的中文字体**。首先检测可用字体：
+**字体选择策略**：
 
-```bash
-# 检测可用的中文字体
-fc-list | grep -i "droid\|noto.*cjk\|simhei\|simsun\|wqy"
-```
+1. **首选 Fandol**（TeX Live 自带，中文标点与弯引号字形齐全）：
+   ```latex
+   \usepackage{fontspec}  % 必须在 xeCJK 之前
+   \usepackage{xeCJK}
+   \setCJKmainfont{FandolSong}
+   \setCJKsansfont{FandolHei}
+   \setCJKmonofont{FandolFang}
+   ```
+   验证方法：检查 `/usr/share/texlive/texmf-dist/fonts/opentype/public/fandol/FandolSong-Regular.otf` 是否存在
+   
+   **重要**：Fandol 是 TeX Live 字体，XeLaTeX 可以直接使用，**不需要** `fc-list` 能看到。只要文件存在就可用。
 
-**字体优先级**（按可用性选择）：
-1. `Droid Sans Fallback` - 最常见，几乎所有 Linux 系统都有
-2. `Noto Sans CJK SC` / `Noto Serif CJK SC` - 较新系统
-3. `WenQuanYi Micro Hei` / `WenQuanYi Zen Hei` - 文泉驿字体
-4. `SimHei` / `SimSun` - Windows 字体（如果可用）
+2. **备选 Droid Sans Fallback**（仅当 Fandol 文件不存在时）：
+   ```latex
+   \setCJKmainfont{Droid Sans Fallback}
+   \setCJKsansfont{Droid Sans Fallback}
+   \setCJKmonofont{Droid Sans Fallback}
+   ```
 
-**推荐配置**（使用 Droid Sans Fallback，兼容性最好）：
-
-```latex
-\documentclass[11pt,a4paper]{article}
-\usepackage{fontspec}
-\usepackage{xeCJK}
-\setCJKmainfont{Droid Sans Fallback}
-\setCJKsansfont{Droid Sans Fallback}
-\setCJKmonofont{Droid Sans Fallback}
-\usepackage{amsmath, amssymb}
-\usepackage{graphicx}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{hyperref}
-\usepackage{booktabs}
-\usepackage{longtable}
-```
-
-**注意**：不要使用 `Noto Sans CJK SC` 等字体，除非已确认系统安装。默认使用 `Droid Sans Fallback`。
+**实际使用**：在生成 .tex 文件前，检查 Fandol 文件是否存在（不要用 fc-list）。如果存在就用 Fandol，否则用 Droid Sans Fallback。
 
 #### 四种彩色框定义
 
@@ -205,6 +178,8 @@ fc-list | grep -i "droid\|noto.*cjk\|simhei\|simsun\|wqy"
 \section{阶段 2: ...}
 ...
 \section{结论}           % 开放问题、未来方向
+\begin{thebibliography}{99}  % 参考文献（必须）
+\end{thebibliography}
 ```
 
 **大 cluster（> 20 链）**：总综述 + 子综述
@@ -216,6 +191,8 @@ fc-list | grep -i "droid\|noto.*cjk\|simhei\|simsun\|wqy"
 \section{子综述索引}           % 表格：子综述 ID/标题/覆盖阶段/论文数
 \section{跨子综述的共性发现}    % 方法论共识、定量一致性、矛盾结论
 \section{结论与展望}
+\begin{thebibliography}{99}  % 参考文献（必须）
+\end{thebibliography}
 ```
 
 子综述（sub_review_X.tex）：
@@ -224,7 +201,22 @@ fc-list | grep -i "droid\|noto.*cjk\|simhei\|simsun\|wqy"
 \section{阶段 A}        % 详细公式 + 四种彩色框
 \section{阶段 B}
 \section{小结}
+\begin{thebibliography}{99}  % 参考文献（必须）
+\end{thebibliography}
 ```
+
+**强制要求**：
+1. **决策树图片**：在引言部分必须插入决策树可视化：
+   ```latex
+   \begin{figure}[H]
+   \centering
+   \includegraphics[width=0.9\textwidth]{decision_tree.png}
+   \caption{工作流决策树}
+   \label{fig:decision_tree}
+   \end{figure}
+   ```
+2. **四种彩色框**：每个阶段末尾必须包含适用的彩色框（toolbox, parambox, casebox, pitfallbox），至少 1 个
+3. **参考文献**：文档末尾必须有完整的 `\begin{thebibliography}{99}...\end{thebibliography}` 部分，包含所有 A-主线论文
 
 #### 写作原则
 
@@ -255,19 +247,21 @@ fc-list | grep -i "droid\|noto.*cjk\|simhei\|simsun\|wqy"
 
 #### 参考文献
 
-从 `paper_mapping.json` 提取完整的标题、作者、期刊信息。格式：
+从 `paper_mapping.json` 提取完整的标题、作者、期刊信息。**每条引用必须包含全部作者、完整标题、期刊、年份、卷号、页码**。格式：
 
 ```latex
 \begin{thebibliography}{99}
-\bibitem{Zhang2023} Zhang X, Wang Y, Li Z. Microarray profile of differentially expressed genes in a monkey model of allergic asthma. Nature Methods, 2023, 20(5): 123-135.
-\bibitem{Liu2022} Liu H, Chen M. Evidence of genome-wide G4 DNA-mediated gene expression in human cancer cells. Science, 2022, 378(6615): 456-461.
+\bibitem{Zhang2023} Zhang X, Wang Y, Li Z, Chen M, Liu H. Microarray profile of differentially expressed genes in a monkey model of allergic asthma. Nature Methods, 2023, 20(5): 123-135.
+\bibitem{Liu2022} Liu H, Chen M, Wang J, Zhao L. Evidence of genome-wide G4 DNA-mediated gene expression in human cancer cells. Science, 2022, 378(6615): 456-461.
 \end{thebibliography}
 ```
 
 **强制约束**：
 1. **所有 A-主线论文必须被引用**：从 `chain_classification.json` 获取 A-主线论文列表，确保每篇都有对应的 `\bibitem`
 2. **禁止省略或截断**：参考文献部分必须完整，不得因篇幅限制而省略
-3. **自动验证**：生成后检查 `count(\bibitem) == count(A-主线论文)`，如不一致则报错并列出遗漏的论文
+3. **禁止 "et al." 缩写**：必须列出全部作者姓名，不得用 "et al."、"等" 或任何缩写形式替代
+4. **禁止编造**：所有信息必须来自 `paper_mapping.json`（其数据来源为 MD 文件头部）。如果 volume/pages 字段为空，则省略该部分（写"期刊名, 年份"即可），但绝不可编造虚假的卷号页码。如果 journal 为空，使用 DOI 链接代替（格式：`\url{https://doi.org/...}`）。**绝不可使用 "Unknown Journal" 等占位符**
+5. **自动验证**：生成后检查 `count(\bibitem) == count(A-主线论文)`，如不一致则报错并列出遗漏的论文
 4. **使用 bibitem_key**：每个 `\bibitem{key}` 的 key 必须与 `paper_mapping.json` 中的 `bibitem_key` 一致
 
 ### Step 4: 生成决策树可视化
@@ -320,15 +314,15 @@ dot -Tpdf decision_tree.dot -o decision_tree.pdf
 **编译前必须检查字体**：
 
 ```bash
-# 检查 .tex 文件中使用的字体是否可用
 grep "setCJKmainfont" review_cluster_N.tex
-fc-list | grep -i "droid"  # 确认 Droid Sans Fallback 存在
+kpathwhich FandolSong-Regular.otf   # 应输出 .otf 路径；若无则未正确安装 TeX Live
 ```
 
-如果字体不可用，**自动替换为 Droid Sans Fallback**：
+如果仍使用旧模板中的 `Droid Sans Fallback` 或错误的 Noto 名称，**优先改为 Fandol**：
 
 ```bash
-sed -i 's/Noto Serif CJK SC/Droid Sans Fallback/g; s/Noto Sans CJK SC/Droid Sans Fallback/g' review_cluster_N.tex
+sed -i 's/setCJKmainfont{Droid Sans Fallback}/setCJKmainfont{FandolSong}/g; s/setCJKsansfont{Droid Sans Fallback}/setCJKsansfont{FandolHei}/g; s/setCJKmonofont{Droid Sans Fallback}/setCJKmonofont{FandolFang}/g' review_cluster_N.tex
+# 若曾写 Noto 但未安装，可改为 FandolSong / FandolHei / FandolFang
 ```
 
 **编译命令**：
@@ -475,14 +469,24 @@ echo "✓ 中间文件清理完成"
 ## 决策树
 ```
 
-## 性能优化总结
+### Step 7: 清理中间文件
 
-| 优化项 | 原方案（04+05分离） | 新方案（合并） | 改善 |
-|--------|-------------------|---------------|------|
-| paper_extractions.yaml 读取 | 2次 | 1次 | -50% |
-| workflow_structure.json 读取 | 2次 | 1次 | -50% |
-| 上下文切换 | 2次 | 1次 | 更高效 |
-| 总耗时（估算） | 100% | 60% | **-40%** |
+完成所有输出后，删除以下中间文件：
+- `chain_classification.json` - 已整合到 paper_extractions.yaml
+- `step_statistics.json` - 已整合到 workflow_structure.json
+- `review_plan.json` - 已整合到 review.tex
+- `paper_inventory.md` - 已整合到 review.tex
+- `paper_mapping.json` - 已整合到 review.tex 的 \bibitem
+- `.extraction_progress.json` - 进度追踪文件（隐藏文件）
+- `review_cluster_N.aux`, `review_cluster_N.log`, `review_cluster_N.out` - LaTeX 编译产物
+- `decision_tree.pdf` - 与 decision_tree.png 重复（保留 PNG 即可）
+
+保留以下文件：
+- `review_cluster_N.pdf`, `decision_tree.png` - 人类可读输出
+- `workflow_3layer.md`, `review_cluster_N.tex`, `decision_tree.dot` - Agent 可读输出
+- `workflow_meta.json`, `workflow_structure.json` - 元数据
+- `paper_extractions.yaml` - 调试/追溯
+- `selected_chains.json`, `xml/`, `md/` - 原始输入
 
 ## 验证清单
 
@@ -502,12 +506,15 @@ echo "✓ 中间文件清理完成"
 - [ ] 综述全文使用中文
 - [ ] 术语首次出现时有英文对照
 - [ ] xeCJK preamble 配置正确
+- [ ] **四种彩色框已定义**（toolbox, parambox, casebox, pitfallbox）
+- [ ] **引言部分包含决策树图片**（`\includegraphics{decision_tree.png}`）
 - [ ] 每个阶段有 ≥ 1 个公式
-- [ ] 每个阶段末尾有四种彩色框（适用项）
+- [ ] **每个阶段末尾有彩色框**（至少 1 个，适用项全部包含）
 - [ ] 案例框含实现细节（QC、ID 映射、资源版本）
 - [ ] 陷阱框覆盖：方法缺陷 + 论文遗漏
 - [ ] 引言含问题界定、范式、论文表
 - [ ] **正文中使用 `\cite{bibitem_key}` 或 "FirstAuthor et al. (Year)"，无裸 paper_id**
+- [ ] **参考文献部分存在**（`\begin{thebibliography}{99}...\end{thebibliography}`）
 - [ ] **参考文献完整且格式一致（使用 paper_mapping.json 生成）**
 - [ ] **所有 A-主线论文已被引用（count(\bibitem) == count(A-主线论文)）**
 - [ ] 引文覆盖检查通过（无漏引）
@@ -517,24 +524,28 @@ echo "✓ 中间文件清理完成"
 ### 可视化
 - [ ] decision_tree.dot 存在且语法正确
 - [ ] decision_tree.png 已生成
-- [ ] decision_tree.pdf 已生成
 - [ ] 节点显示方法频次
 - [ ] 使用率标注以 A-主线总数为分母
 - [ ] 使用简单文本标签（无 HTML TABLE）
 
 ### LaTeX 编译
 - [ ] xelatex 两遍无 error（或标注需外部编译）
-- [ ] 中文字体正确
+- [ ] 中文字体为 **Fandol**（`FandolSong` / `FandolHei` / `FandolFang`）或等价路径加载，编译无字体缺失
 - [ ] review_cluster_N.pdf 已生成（或标注环境限制）
 
 ### 输出文件校验
 - [ ] review_cluster_N.pdf 存在且 > 100 字节
-- [ ] decision_tree.pdf 存在且 > 100 字节
+- [ ] decision_tree.png 存在且 > 100 字节
 - [ ] paper_extractions.yaml 存在且 > 100 字节
 - [ ] workflow_structure.json 存在且 > 100 字节且 JSON 有效
 - [ ] PDF 文件格式校验通过
 
 ### 中间文件清理
+- [ ] chain_classification.json 已删除
+- [ ] step_statistics.json 已删除
+- [ ] review_plan.json 已删除
+- [ ] paper_inventory.md 已删除
+- [ ] paper_mapping.json 已删除
 - [ ] .extraction_progress.json 已删除
-- [ ] /tmp/paper_titles.txt 已删除
 - [ ] LaTeX 编译产物（.aux, .log, .out）已删除
+- [ ] decision_tree.pdf 已删除

@@ -13,6 +13,7 @@ from .index_builder import (
     build_workflow_registry
 )
 from .retriever import WorkflowRetriever
+from .chain_search_api import ChainSearchRequest, search_reasoning_chains
 from ..step1.vectorizer import create_embedder
 
 
@@ -182,7 +183,7 @@ def run_step3_pipeline(config: Dict, action: str = "build_index", **kwargs) -> D
 
     Args:
         config: 配置字典
-        action: 操作类型 ("build_index" 或 "search")
+        action: 操作类型 ("build_index" / "search" / "chain_search")
         **kwargs: 其他参数（如 query, top_k, domain）
 
     Returns:
@@ -205,5 +206,24 @@ def run_step3_pipeline(config: Dict, action: str = "build_index", **kwargs) -> D
             "total_results": len(results),
             "results": results
         }
+    elif action == "chain_search":
+        query = kwargs.get("query")
+        if not query:
+            raise ValueError("Query is required for chain_search action")
+
+        top_k = kwargs.get("top_k", 100)
+        table = kwargs.get("table", "lkm_reasoning_chain_embeddings_v2")
+        allow_degraded = bool(kwargs.get("allow_degraded", True))
+        domain = kwargs.get("domain")
+
+        req = ChainSearchRequest(
+            query=query,
+            top_k=top_k,
+            table=table,
+            domain=domain,
+            allow_degraded=allow_degraded,
+        )
+        resp = search_reasoning_chains(config, req)
+        return resp.to_dict()
     else:
         raise ValueError(f"Unknown action: {action}")

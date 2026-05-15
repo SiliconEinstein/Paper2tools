@@ -1,0 +1,68 @@
+{
+  "answer_id": "a001",
+  "query_id": "q001",
+  "final_answer": "2023年A产品销售额高于2022年，增加120万元。",
+  "claims": [
+    {
+      "claim_id": "c1",
+      "text": "2023年A产品销售额高于2022年。",
+      "verdict": "supported",
+      "evidence": [
+        {
+          "cell_id": "sales_table_2022_2023:r12:销售额_万元",
+          "table_id": "sales_table_2022_2023",
+          "row_id": "r12",
+          "col_key": "销售额_万元",
+          "raw_value": 820
+        },
+        {
+          "cell_id": "sales_table_2022_2023:r13:销售额_万元",
+          "table_id": "sales_table_2022_2023",
+          "row_id": "r13",
+          "col_key": "销售额_万元",
+          "raw_value": 940
+        }
+      ],
+      "lineage": [
+        "r12.销售额_万元",
+        "r13.销售额_万元"
+      ],
+      "calc_trace": "940 - 820 > 0"
+    },
+    {
+      "claim_id": "c2",
+      "text": "差值为120万元。",
+      "verdict": "supported",
+      "evidence": [
+        {
+          "cell_id": "sales_table_2022_2023:r12:销售额_万元",
+          "table_id": "sales_table_2022_2023",
+          "row_id": "r12",
+          "col_key": "销售额_万元",
+          "raw_value": 820
+        },
+        {
+          "cell_id": "sales_table_2022_2023:r13:销售额_万元",
+          "table_id": "sales_table_2022_2023",
+          "row_id": "r13",
+          "col_key": "销售额_万元",
+          "raw_value": 940
+        }
+      ],
+      "lineage": [
+        "r12.销售额_万元",
+        "r13.销售额_万元"
+      ],
+      "calc_trace": "940 - 820 = 120"
+    }
+  ],
+  "metrics": {
+    "faithfulness": 1.0,
+    "completeness": 1.0,
+    "unsupported_claim_ratio": 0.0
+  },
+  "notes": [
+    "示例数据用于接口联调"
+  ]
+}
+

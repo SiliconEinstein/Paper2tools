@@ -169,7 +169,7 @@ async def vectorize_reasoning_chains(
                 "domain": domain,
                 "conclusion_id": chain.conclusion_id,
                 "conclusion_title": chain.conclusion_title,
-                "xml_path": f"{tos_prefix}/xml/{chain.paper_id}_{chain.conclusion_id}.xml",
+                "xml_path": f"{tos_prefix}/xml/{chain.paper_id}_reasoning_chain.xml",
                 "md_path": f"{tos_prefix}/md/{chain.paper_id}.md",
                 "chain_text": chain_text[:2000],
                 "cluster_id": -1,

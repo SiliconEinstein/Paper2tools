@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "chartqa-mvp/retrieval-result.schema.json",
+  "title": "Retrieval and Focused Table Output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "query_id",
+    "subtask_id",
+    "retrieval_summary",
+    "focused_table",
+    "evidence_candidates"
+  ],
+  "properties": {
+    "query_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "subtask_id": {
+      "type": "string",
+      "pattern": "^t[0-9]+$"
+    },
+    "retrieval_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "top_k_table",
+        "top_k_column",
+        "top_k_row",
+        "fusion_weights"
+      ],
+      "properties": {
+        "top_k_table": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "top_k_column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "top_k_row": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fusion_weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "dense",
+            "lexical",
+            "structure"
+          ],
+          "properties": {
+            "dense": {
+              "type": "number",
+              "minimum": 0
+            },
+            "lexical": {
+              "type": "number",
+              "minimum": 0
+            },
+            "structure": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "focused_table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "table_id",
+        "selected_columns",
+        "selected_row_ids"
+      ],
+      "properties": {
+        "table_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selected_columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "selected_row_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "filters_applied": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evidence_candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cell_id",
+          "table_id",
+          "row_id",
+          "col_key",
+          "score",
+          "route_hits"
+        ],
+        "properties": {
+          "cell_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "table_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "row_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "col_key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "raw_value": {},
+          "score": {
+            "type": "number"
+          },
+          "route_hits": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "dense",
+                "lexical",
+                "structure",
+                "rule"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

@@ -8,18 +8,11 @@ language: zh-CN
 
 ## 功能概述
 
-**合并原 01_chain_classifier + 02_workflow_structure_builder**
-
 一次性完成：
 1. 链条质量分类（A/B/C + 主线/旁支）
 2. 方法名提取和频次统计
 3. 决策树结构构建
 4. 综述结构规划
-
-**优化点**：
-- 只读取 selected_chains.json **一次**（包含所有 chain_text）
-- 在分类的同时提取方法名，避免二次遍历
-- 所有分析结果一次性写入，减少 I/O
 
 ## 输入要求
 
@@ -52,18 +45,33 @@ language: zh-CN
 
 ### Step 1: 环境检查与论文元数据提取
 
-```bash
-# 检查目录存在性（不读取内容）
-ls xml/ md/ selected_chains.json
-```
-
 **提取论文元数据**（从 md 文件前 20 行）：
 
 对每个 `md/{paper_id}.md` 文件：
-1. 读取前 20 行
-2. 提取：title（通常是第一个 # 标题）、authors、journal、year
+1. 读取前 50 行（MD 文件头部通常包含完整的引用元数据）
+2. 提取以下字段，**每个字段都必须完整，不得省略或缩写**：
+   - **title**：论文完整标题（不截断）
+   - **authors**：**全部作者姓名**（禁止使用 "et al." 或 "等"，必须逐一列出）
+   - **journal**：期刊/会议全称
+   - **year**：发表年份
+   - **volume**：卷号（如有）
+   - **issue**：期号（如有）
+   - **pages**：起止页码（如有）
+   - **doi**：DOI（如有）
 3. 生成 short_name（格式：FirstAuthor_Year，如 "Zhang_2023"）
 4. 生成 bibitem_key（格式：FirstAuthorYear，如 "Zhang2023"）
+
+**元数据提取规则**：
+- MD 文件头部通常包含 `# 标题`、`Authors: ...`、`Journal: ...` 等行，仔细解析每一行
+- 如果前 50 行信息不足，继续向下搜索直到找到完整元数据
+- **禁止编造或猜测**：如果某个字段在 MD 文件中确实不存在，记录为空字符串，但绝不可凭印象补全
+- **期刊名提取策略**（按优先级）：
+  1. 查找 "Published in: ..."、"Journal: ..." 等显式标注
+  2. 从 DOI 前缀推断出版物（如 `10.5194/acp-` → "Atmospheric Chemistry and Physics"；`10.1029/` → "JGR/GRL 系列"）
+  3. 查找论文正文中的自引格式（如 "This paper was published in ..."）
+  4. 如果是预印本（"Preprint"、"Discussion started"），标注为 "Preprint, {平台名}"（如 "Preprint, EGUsphere"）
+  5. 如以上均失败，记录为空字符串
+- authors 字段必须是完整的作者列表字符串（如 "Zhang X, Wang Y, Li Z, Chen M, Liu H"），不可缩写为 "Zhang X et al."
 
 **输出 `paper_mapping.json`**：
 
@@ -71,19 +79,27 @@ ls xml/ md/ selected_chains.json
 {
   "812454164008271872": {
     "title": "Microarray profile of differentially expressed genes in a monkey model of allergic asthma",
-    "authors": "Zhang X, Wang Y, Li Z",
+    "authors": "Zhang X, Wang Y, Li Z, Chen M, Liu H",
     "first_author": "Zhang",
     "journal": "Nature Methods",
     "year": "2023",
+    "volume": "20",
+    "issue": "5",
+    "pages": "123-135",
+    "doi": "10.1038/s41592-023-01234-5",
     "short_name": "Zhang_2023",
     "bibitem_key": "Zhang2023"
   },
   "811909279517769730": {
     "title": "Evidence of genome-wide G4 DNA-mediated gene expression in human cancer cells",
-    "authors": "Liu H, Chen M",
+    "authors": "Liu H, Chen M, Wang J, Zhao L",
     "first_author": "Liu",
     "journal": "Science",
     "year": "2022",
+    "volume": "378",
+    "issue": "6615",
+    "pages": "456-461",
+    "doi": "10.1126/science.abc1234",
     "short_name": "Liu_2022",
     "bibitem_key": "Liu2022"
   }
@@ -91,6 +107,14 @@ ls xml/ md/ selected_chains.json
 ```
 
 **处理冲突**：如果多篇论文生成相同的 short_name（如同一作者同年发表多篇），在后缀添加字母（Zhang_2023a, Zhang_2023b）。
+
+**提取失败处理**：
+- 如果 MD 文件头部格式不规范（如缺少明确的 "Authors:" 行），尝试以下策略：
+  1. 查找标题后的第一段文本，通常包含作者列表（格式：Name1, Name2, Name3）
+  2. 查找包含上标数字的行（如 "Zhou Zang¹, Jane Liu¹"），这是作者-机构关联的标志
+  3. 查找 "Correspondence:" 行之前的所有人名
+- 如果仍无法提取，记录为 "EXTRACTION_FAILED: {paper_id}"，但**不得**使用 "Unknown Authors" 等占位符
+- **验证步骤**：生成 paper_mapping.json 后，检查是否有任何条目包含 "Unknown"、"EXTRACTION_FAILED" 或空字符串。如有，立即报错并列出失败的 paper_id，**停止执行**，不进入 Phase 2
 
 **输出 `paper_inventory.md`**（论文清单表）：
 
@@ -103,38 +127,13 @@ ls xml/ md/ selected_chains.json
 | 811909279517769730 | Liu_2022 | Evidence of genome-wide... | Liu H, Chen M | Science | 2022 |
 ```
 
-### Step 2: 一次性遍历分类 + 提取（核心优化）
-
-**关键**：在一次遍历中完成所有分析，避免重复读取。
+### Step 2: 一次性遍历分类 + 提取
 
 对 `selected_chains.json` 中的每条链：
-
-```python
-for chain in selected_chains:
-    chain_text = chain["chain_text"]
-    
-    # 1. 质量评估（四维）
-    grade, subtype, reason = classify_chain(chain_text)
-    
-    # 2. 同时提取方法名和阶段标签
-    stages, methods = extract_stages_and_methods(chain_text)
-    
-    # 3. 记录到分类结果
-    classification[chain_id] = {
-        "grade": grade,
-        "subtype": subtype,
-        "reason": reason,
-        "stages": stages,           # ← 新增
-        "methods_used": methods     # ← 新增
-    }
-    
-    # 4. 同时更新频次统计
-    if grade == "A" and subtype == "主线":
-        for stage in stages:
-            stage_counts[stage] += 1
-        for method in methods:
-            method_counts[method] += 1
-```
+1. 质量评估（四维）
+2. 同时提取方法名和阶段标签
+3. 记录到分类结果
+4. 同时更新频次统计
 
 **输出**：`chain_classification.json`（增强版，包含 stages 和 methods_used）
 
@@ -409,19 +408,13 @@ for chain in selected_chains:
 }
 ```
 
-## 性能优化总结
-
-| 优化项 | 原方案（01+02分离） | 新方案（合并） | 改善 |
-|--------|-------------------|---------------|------|
-| selected_chains.json 读取 | 2次 | 1次 | -50% |
-| 链条遍历次数 | 2次 | 1次 | -50% |
-| 中间文件写入 | 1个 | 4个（一次性） | 更高效 |
-| 总耗时（估算） | 100% | 55% | **-45%** |
-
 ## 验证清单
 
 - [ ] chain_classification.json 存在且包含 stages 和 methods_used
 - [ ] workflow_structure.json 存在且包含 stages 和 edges
+- [ ] **workflow_structure.json 的每个 stage 都有 paper_refs 字段**
+- [ ] **workflow_structure.json 的每个 method 都有 paper_refs 字段**
+- [ ] **workflow_structure.json 的每个 edge 都有 paper_refs 字段**
 - [ ] step_statistics.json 存在且频次正确
 - [ ] review_plan.json 存在且包含结构决策
 - [ ] paper_inventory.md 存在且包含所有论文
@@ -431,4 +424,5 @@ for chain in selected_chains:
 - [ ] 频次百分比以 A-主线总数为分母
 - [ ] A-主线 ≥ 3（否则已警告用户）
 - [ ] **paper_mapping.json 中 short_name 无冲突（或已添加后缀）**
+- [ ] **paper_mapping.json 中无 "Unknown"、"EXTRACTION_FAILED" 或空字符串（如有则报错停止）**
 - [ ] **workflow_meta.json 的 method_vector 长度与 key_methods 数量一致**

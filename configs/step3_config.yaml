@@ -40,6 +40,9 @@ retrieval:
     threshold: 0.7
     model: "gpt5_mini"
 
+  # 语义距离类型：cosine / l2
+  distance_metric: "cosine"
+
   # 关键词提取
   keyword_extraction:
     min_length: 2
@@ -70,3 +73,34 @@ retrieval:
 # 运行参数
 runtime:
   verbose: true
+
+# 对外接口：思维链向量库检索
+# 外部只需要传 query / top_k（可选 table）。
+chain_search:
+  # embedding（查询向量）
+  embedder:
+    model: "text-embedding-v4"
+    dimension: 1024
+    api_url: null
+    access_key: null
+    http_timeout: 20
+
+  # 召回与融合参数（内部细节）
+  ann_top_k: 1000
+  lexical_top_k: 800
+  rule_top_k: 200
+  weights:
+    vector: 0.65
+    lexical: 0.25
+    rule: 0.10
+
+  # ByteHouse 连接信息（可由环境变量覆盖）
+  bytehouse:
+    endpoint: null
+    host: null
+    port: null
+    user: null
+    password: null
+    database: null
+    https: true
+    timeout_sec: 20

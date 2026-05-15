@@ -1,0 +1,57 @@
+{
+  "query_id": "q001",
+  "subtask_id": "t1",
+  "retrieval_summary": {
+    "top_k_table": 5,
+    "top_k_column": 20,
+    "top_k_row": 200,
+    "fusion_weights": {
+      "dense": 0.45,
+      "lexical": 0.35,
+      "structure": 0.2
+    }
+  },
+  "focused_table": {
+    "table_id": "sales_table_2022_2023",
+    "selected_columns": [
+      "年份",
+      "产品",
+      "销售额_万元"
+    ],
+    "selected_row_ids": [
+      "r12",
+      "r13"
+    ],
+    "filters_applied": [
+      "产品=A产品",
+      "年份 in [2022,2023]"
+    ]
+  },
+  "evidence_candidates": [
+    {
+      "cell_id": "sales_table_2022_2023:r12:销售额_万元",
+      "table_id": "sales_table_2022_2023",
+      "row_id": "r12",
+      "col_key": "销售额_万元",
+      "raw_value": 820,
+      "score": 0.94,
+      "route_hits": [
+        "dense",
+        "lexical"
+      ]
+    },
+    {
+      "cell_id": "sales_table_2022_2023:r13:销售额_万元",
+      "table_id": "sales_table_2022_2023",
+      "row_id": "r13",
+      "col_key": "销售额_万元",
+      "raw_value": 940,
+      "score": 0.93,
+      "route_hits": [
+        "dense",
+        "structure"
+      ]
+    }
+  ]
+}
+

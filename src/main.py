@@ -28,10 +28,26 @@ def run_step2(config_path: str):
     run_step2_pipeline(config)
 
 
-def run_step3(config_path: str, action: str, query: str = None, top_k: int = 5, domain: str = None):
+def run_step3(
+    config_path: str,
+    action: str,
+    query: str = None,
+    top_k: int = 5,
+    domain: str = None,
+    table: str = "lkm_reasoning_chain_embeddings_v2",
+    allow_degraded: bool = True,
+):
     from src.step3 import run_step3_pipeline
     config = load_config(config_path)
-    run_step3_pipeline(config, action=action, query=query, top_k=top_k, domain=domain)
+    run_step3_pipeline(
+        config,
+        action=action,
+        query=query,
+        top_k=top_k,
+        domain=domain,
+        table=table,
+        allow_degraded=allow_degraded,
+    )
 
 
 def main():
@@ -40,10 +56,16 @@ def main():
     parser.add_argument("--config", default=None, help="Config file path")
 
     # Step3 specific arguments
-    parser.add_argument("--action", choices=["build_index", "search"], help="Step3 action")
+    parser.add_argument("--action", choices=["build_index", "search", "chain_search"], help="Step3 action")
     parser.add_argument("--query", help="Search query (for Step3 search)")
     parser.add_argument("--top-k", type=int, default=5, help="Number of results (for Step3 search)")
     parser.add_argument("--domain", help="Domain filter (for Step3 search)")
+    parser.add_argument("--table", default="lkm_reasoning_chain_embeddings_v2", help="Chain table (for Step3 chain_search)")
+    parser.add_argument(
+        "--strict-routes",
+        action="store_true",
+        help="Fail when any route fails in chain_search",
+    )
 
     args = parser.parse_args()
 
@@ -57,7 +79,15 @@ def main():
         config_path = args.config or "configs/step3_config.yaml"
         if not args.action:
             parser.error("--action is required for step 3")
-        run_step3(config_path, args.action, args.query, args.top_k, args.domain)
+        run_step3(
+            config_path,
+            args.action,
+            args.query,
+            args.top_k,
+            args.domain,
+            args.table,
+            not args.strict_routes,
+        )
 
 
 if __name__ == "__main__":

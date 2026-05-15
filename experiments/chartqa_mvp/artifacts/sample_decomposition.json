@@ -1,0 +1,66 @@
+{
+  "query_id": "q001",
+  "question": "2023年A产品销售额是否高于2022年？高多少？",
+  "language": "zh-CN",
+  "constraints": {
+    "time_range": [
+      "2022",
+      "2023"
+    ],
+    "entities": [
+      "A产品"
+    ],
+    "metrics": [
+      "销售额"
+    ],
+    "units": [
+      "万元"
+    ]
+  },
+  "subtasks": [
+    {
+      "task_id": "t1",
+      "objective": "检索A产品在2022与2023年的销售额单元格",
+      "operation": "retrieve",
+      "dependencies": [],
+      "expected_output": "包含两年销售额的cell集合",
+      "evidence_type": "cell",
+      "confidence": 0.95
+    },
+    {
+      "task_id": "t2",
+      "objective": "计算同比差值与增幅",
+      "operation": "compute",
+      "dependencies": [
+        "t1"
+      ],
+      "expected_output": "差值与百分比",
+      "evidence_type": "aggregation",
+      "confidence": 0.9
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "c1",
+      "text": "2023年A产品销售额高于2022年。",
+      "claim_type": "comparison",
+      "required_evidence": [
+        "cell",
+        "lineage"
+      ]
+    },
+    {
+      "claim_id": "c2",
+      "text": "差值为120万元。",
+      "claim_type": "calculation",
+      "required_evidence": [
+        "cell",
+        "lineage"
+      ]
+    }
+  ],
+  "assumptions": [
+    "销售口径为含税收入"
+  ]
+}
+

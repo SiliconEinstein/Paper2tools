@@ -1,0 +1,256 @@
+{
+  "environment": {
+    "description": "ARM 包的运行环境配置 - 基于超导体电声耦合计算工作流",
+    "python_version": "3.9+",
+    "required_packages": [
+      {
+        "name": "numpy",
+        "version": ">=1.21.0",
+        "purpose": "数值计算"
+      },
+      {
+        "name": "scipy",
+        "version": ">=1.7.0",
+        "purpose": "科学计算（积分、插值、优化）"
+      },
+      {
+        "name": "matplotlib",
+        "version": ">=3.4.0",
+        "purpose": "数据可视化"
+      }
+    ],
+    "optional_packages": [
+      {
+        "name": "ase",
+        "version": ">=3.22.0",
+        "purpose": "原子结构操作和可视化"
+      },
+      {
+        "name": "pymatgen",
+        "version": ">=2022.0.0",
+        "purpose": "材料分析和晶体结构处理"
+      },
+      {
+        "name": "phonopy",
+        "version": ">=2.12.0",
+        "purpose": "声子计算后处理"
+      }
+    ],
+    "computational_tools": {
+      "dft_codes": [
+        {
+          "name": "Quantum ESPRESSO",
+          "version": "6.8+",
+          "purpose": "DFT 电子结构计算和 DFPT 声子计算",
+          "modules": ["pw.x", "ph.x", "q2r.x", "matdyn.x"],
+          "typical_parameters": {
+            "ecutwfc": "40-80 Ry (平面波截断能)",
+            "ecutrho": "4*ecutwfc (电荷密度截断能)",
+            "k_points": "12x12x12 to 36x36x36 (Monkhorst-Pack)",
+            "q_points": "6x6x6 (DFPT 声子计算)",
+            "conv_thr": "1e-8 Ry (自洽收敛标准)",
+            "smearing": "Gaussian or Methfessel-Paxton, 0.02-0.2 eV"
+          },
+          "pseudopotentials": {
+            "types": ["Norm-conserving", "Ultrasoft", "PAW"],
+            "sources": ["SSSP library", "PSlibrary", "GBRV"]
+          }
+        },
+        {
+          "name": "VASP",
+          "version": "5.4+",
+          "purpose": "DFT 结构优化和电子结构计算",
+          "typical_parameters": {
+            "ENCUT": "400-600 eV",
+            "KPOINTS": "Gamma-centered Monkhorst-Pack",
+            "EDIFF": "1e-6 eV",
+            "ISMEAR": "0 (Gaussian) or 1 (Methfessel-Paxton)"
+          }
+        }
+      ],
+      "analysis_tools": [
+        {
+          "name": "EPW",
+          "version": "5.4+",
+          "purpose": "电声耦合计算（Wannier 插值）",
+          "dependencies": ["Quantum ESPRESSO", "Wannier90"],
+          "typical_parameters": {
+            "nkf": "fine k-mesh for Fermi surface (e.g., 60x60x60)",
+            "nqf": "fine q-mesh for phonons (e.g., 30x30x30)"
+          }
+        },
+        {
+          "name": "Wannier90",
+          "version": "3.1+",
+          "purpose": "最大局域化 Wannier 函数构建",
+          "dependencies": ["Quantum ESPRESSO or VASP"]
+        }
+      ],
+      "post_processing": [
+        {
+          "name": "custom Python scripts",
+          "purpose": "Eliashberg 函数分析、Tc 预测（Allen-Dynes 公式）"
+        }
+      ]
+    },
+    "hardware_requirements": {
+      "min_memory_gb": 16,
+      "recommended_memory_gb": 64,
+      "min_cores": 8,
+      "recommended_cores": 32,
+      "gpu_required": false,
+      "disk_space_gb": 50,
+      "notes": "内存需求取决于 k 点网格密度和原子数；推荐使用 HPC 集群进行大规模计算"
+    },
+    "notes": "环境配置基于论文中报告的计算方法汇总。实际需求取决于材料体系大小和计算精度要求。"
+  },
+  "papers": [
+    {
+      "paper_id": "867771392240648834",
+      "material": "MgB₂ / AlB₂",
+      "title": "Phonon dispersion and electron-phonon coupling in MgB₂ and AlB₂",
+      "computational_setup": {
+        "dft_code": "Mixed-basis pseudopotential method",
+        "xc_functional": "LDA (Hedin-Lundqvist)",
+        "pseudopotential": "Martins-Troullier (Mg/Al), Vanderbilt (B)",
+        "k_points": "up to 13824 in BZ, (36,36,36) for Fermi-surface average",
+        "q_points": "(6,6,6) reciprocal lattice grid",
+        "cutoff_energy": "16 Ry (plane wave)",
+        "smearing": "Gaussian, 0.2 eV",
+        "convergence_criteria": {
+          "energy": "< 10⁻⁶ Ry"
+        }
+      },
+      "computed_lambda": {
+        "MgB2": 0.73,
+        "AlB2": 0.43
+      },
+      "omega_log_meV": {
+        "MgB2": 60.9,
+        "AlB2": 49.9
+      },
+      "mu_star": 0.05,
+      "predicted_Tc_K": {
+        "MgB2": 40,
+        "AlB2": 9
+      },
+      "expected_results": {
+        "E2g_frequency_meV": {
+          "MgB2": 70.8,
+          "AlB2": 125.0
+        },
+        "E2g_linewidth_meV": 15,
+        "alpha2F_peak_meV": "60-70 (MgB₂)",
+        "phonon_linewidth_formula": {
+          "description": "γ = λ × ω × calibration_factor",
+          "calibration_factor": 0.29,
+          "derivation": "从 MgB₂ 数据校准: λ=0.73, ω=70.8 meV, γ=15 meV → γ/(λ×ω) ≈ 0.29"
+        },
+        "key_finding": "E₂g模式在MgB₂中强烈软化，是电声耦合的主要来源"
+      },
+      "experimental_methods": {
+        "analysis_methods": {
+          "eliashberg_equation": "线性化Eliashberg方程求解Tc",
+          "raman": "micro-Raman验证E₂g频率和线宽"
+        }
+      },
+      "metadata_version": "v2",
+      "last_updated": "2026-05-14",
+      "changelog": "补充声子线宽计算公式和校准因子 0.29",
+      "updated_by": "ARM iteration v2"
+    },
+    {
+      "paper_id": "812362454112665602",
+      "material": "Al₁₋ₓMgₓB₂ (0.5 ≤ x ≤ 1)",
+      "title": "Two-band electron-phonon coupling in Al-doped MgB₂",
+      "computational_setup": {
+        "dft_code": "未明确（引用文献中的计算）",
+        "note": "论文主要基于理论模型和文献数据，未进行新的 DFT 计算"
+      },
+      "computed_lambda": {
+        "sigma_band_coupling": "λ_σ(x), 使用D=130 meV/pm"
+      },
+      "expected_results": {
+        "E2g_energy_meV": "70 (x=1) to 115 (x=0.5)",
+        "E2g_linewidth_meV": 8,
+        "deformation_potential": "D = 130 meV/pm",
+        "pi_band_coupling": "λ_π = 0.44 (弱耦合)",
+        "lambda_sigma_formula": {
+          "description": "λ_σ = a × N_σ + b (线性插值)",
+          "coefficients": {
+            "a": 0.357,
+            "b": 0.225
+          },
+          "derivation": "从 MgB₂ (N_σ=0.35, λ_σ=0.35) 和 AlMgB₂ (N_σ=0.07, λ_σ=0.25) 两点拟合",
+          "data_points": [
+            {
+              "material": "MgB2",
+              "N_sigma": 0.35,
+              "lambda_sigma": 0.35
+            },
+            {
+              "material": "AlMgB2",
+              "N_sigma": 0.07,
+              "lambda_sigma": 0.25
+            }
+          ]
+        },
+        "double_band_Tc_formula": {
+          "description": "双带材料使用 DOS 加权有效耦合常数",
+          "formula": "λ_eff = (N_σ × λ_σ + N_π × λ_π) / (N_σ + N_π)",
+          "rationale": "反映各带对超导配对的实际贡献，而非简单相加 λ_σ + λ_π"
+        },
+        "key_finding": "σ带耦合随Al掺杂降低（E₂g硬化），解释Tc降低"
+      },
+      "metadata_version": "v3",
+      "last_updated": "2026-05-14",
+      "changelog": "补充 λ_σ 线性插值公式系数、双带 Tc 计算的 DOS 加权公式、AlMgB₂ 线宽数据",
+      "updated_by": "ARM iteration v3, v6"
+    },
+    {
+      "paper_id": "867758380683362769",
+      "material": "MgB₂ / AgB₂ / AuB₂",
+      "title": "Electron-phonon coupling in noble-metal diborides",
+      "computational_setup": {
+        "dft_code": "DFT (McMillan-Hopfield参数)",
+        "method": "刚性离子近似计算 Hopfield 参数",
+        "approximations": {
+          "debye_approximation": "<ω²> ≈ Θ_D²/2"
+        }
+      },
+      "computed_lambda": {
+        "MgB2": 0.79,
+        "AgB2": 1.35,
+        "AuB2": 1.65
+      },
+      "debye_temperature_K": 700,
+      "expected_results": {
+        "hopfield_parameters": {
+          "Mg": 0.03,
+          "B_in_MgB2": 1.87,
+          "B_in_AgB2": 3.17,
+          "B_in_AuB2": 3.88,
+          "unit": "eV/Å²"
+        },
+        "lambda_formula": {
+          "description": "λ = Σ_α η_α/(M_α × <ω²>) × unit_factor",
+          "unit_conversion_factor": 8162,
+          "derivation": "从 MgB₂ 数据反推: λ=0.79, (η_Mg/M_Mg + η_B/M_B)=0.1742 eV/amu/Å², <ω²>=1800 meV²",
+          "omega_sq_avg_formula": "<ω²> ≈ Θ_D²/2",
+          "Theta_D_meV": 60
+        },
+        "key_finding": "AgB₂和AuB₂的η_B远高于MgB₂，预测更强的电声耦合"
+      },
+      "experimental_methods": {
+        "analysis_methods": {
+          "hopfield_rigid_ion": "刚性离子近似计算McMillan-Hopfield参数η",
+          "debye_approximation": "<ω²> ≈ Θ_D²/2"
+        }
+      },
+      "metadata_version": "v2",
+      "last_updated": "2026-05-14",
+      "changelog": "补充 Hopfield 参数单位、λ 计算公式的单位转换因子 8162、<ω²> 计算方法",
+      "updated_by": "ARM iteration v2"
+    }
+  ]
+}

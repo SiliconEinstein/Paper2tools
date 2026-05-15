@@ -4,7 +4,7 @@ Step3 检索器 - 多路召回 + 重排序
 
 import json
 from pathlib import Path
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Tuple
 from collections import defaultdict
 
 from .utils import extract_keywords, detect_data_types, detect_methods
@@ -51,6 +51,7 @@ class WorkflowRetriever:
 
         # 停用词
         self.stopwords = set(self.config.get("keyword_extraction", {}).get("stopwords", []))
+        self.distance_metric = self.config.get("distance_metric", "cosine")
 
     def retrieve(self, query: str, top_k: int = 5, domain: str = None) -> List[Dict]:
         """
@@ -108,9 +109,10 @@ class WorkflowRetriever:
 
         candidates = []
         for r in results:
+            score = self._distance_to_similarity(r.get("distance", 0.0))
             candidates.append({
                 "workflow_id": r["id"],  # LanceVectorStore.search returns "id" field
-                "score": 1 - r["distance"],
+                "score": score,
                 "source": "semantic"
             })
 
@@ -231,6 +233,9 @@ class WorkflowRetriever:
                 candidate["score"]
             )
 
+        # 先做分源归一化，避免不同路由分值尺度不一致
+        workflow_scores = self._normalize_source_scores(workflow_scores)
+
         # 计算综合得分
         final_scores = []
         for wid, scores in workflow_scores.items():
@@ -260,6 +265,51 @@ class WorkflowRetriever:
         final_scores.sort(key=lambda x: x["score"], reverse=True)
 
         return final_scores
+
+    def _distance_to_similarity(self, distance: float) -> float:
+        """
+        将向量距离转为相似度分值（0~1，越大越相似）。
+        支持 cosine / l2。
+        """
+        d = float(distance)
+        metric = str(self.distance_metric).lower()
+        if metric in ("cosine", "cos"):
+            # cosineDistance 通常在 [0, 2]，保守映射到 [0,1]
+            score = 1.0 - (d / 2.0)
+        elif metric in ("l2", "euclidean"):
+            # 距离越大相似越低
+            score = 1.0 / (1.0 + d)
+        else:
+            score = 1.0 / (1.0 + d)
+        if score < 0:
+            return 0.0
+        if score > 1:
+            return 1.0
+        return score
+
+    def _normalize_source_scores(self, workflow_scores: Dict[str, Dict[str, float]]) -> Dict[str, Dict[str, float]]:
+        """
+        对每一路 source 的分数做 min-max 归一化，统一尺度后再加权。
+        """
+        sources = ["semantic", "keyword", "io_type", "method"]
+        per_source_values: Dict[str, List[Tuple[str, float]]] = {s: [] for s in sources}
+        for wid, scores in workflow_scores.items():
+            for s in sources:
+                per_source_values[s].append((wid, float(scores.get(s, 0.0))))
+
+        normalized = {wid: dict(scores) for wid, scores in workflow_scores.items()}
+        for s in sources:
+            vals = [x[1] for x in per_source_values[s]]
+            if not vals:
+                continue
+            vmin, vmax = min(vals), max(vals)
+            if abs(vmax - vmin) < 1e-9:
+                for wid, v in per_source_values[s]:
+                    normalized[wid][s] = 1.0 if v > 0 else 0.0
+            else:
+                for wid, v in per_source_values[s]:
+                    normalized[wid][s] = (v - vmin) / (vmax - vmin)
+        return normalized
 
     def close(self):
         """关闭资源"""
